@@ -173,11 +173,10 @@ with st.sidebar:
 
     st.subheader("Navigation")
 
-    destination = st.text_input(
-        "Destination",
-        key="destination_input"
-    )
+ destination = st.session_state.get("destination_input","")
 
+if destination:
+    st.session_state.destination_input = destination
 
     # voice destination
 
@@ -190,34 +189,29 @@ with st.sidebar:
 function startSpeech(){
 
 const recognition = new webkitSpeechRecognition();
-
 recognition.lang="en-US";
 
 recognition.onresult=function(event){
 
 const text = event.results[0][0].transcript;
 
-const inputs = window.parent.document.querySelectorAll("input");
-
-if(inputs.length>0){
-
-inputs[0].value=text;
-
-inputs[0].dispatchEvent(new Event("input",{bubbles:true}));
-
-}
+window.parent.postMessage(
+{
+type: "streamlit:setComponentValue",
+value: text
+},
+"*"
+);
 
 };
 
 recognition.start();
-
 }
 
 </script>
 """,
 height=80
-    )
-
+)
 
     if st.button("Start Navigation"):
 
