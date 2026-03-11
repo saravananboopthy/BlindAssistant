@@ -171,21 +171,20 @@ with st.sidebar:
 
     st.divider()
 
-    st.subheader("Navigation")
+       st.subheader("Navigation")
 
- destination = st.session_state.get("destination_input","")
+    # Destination input
+    destination = st.text_input(
+        "Destination",
+        key="destination_input"
+    )
 
-if destination:
-    st.session_state.destination_input = destination
-
-    # voice destination
-
+    # Voice destination button
     components.html(
-"""
+    """
 <button onclick="startSpeech()">🎤 Speak Destination</button>
 
 <script>
-
 function startSpeech(){
 
 const recognition = new webkitSpeechRecognition();
@@ -195,24 +194,23 @@ recognition.onresult=function(event){
 
 const text = event.results[0][0].transcript;
 
-window.parent.postMessage(
-{
-type: "streamlit:setComponentValue",
-value: text
-},
-"*"
-);
+const inputs = window.parent.document.querySelectorAll("input");
+
+if(inputs.length>0){
+inputs[0].value = text;
+inputs[0].dispatchEvent(new Event("input",{bubbles:true}));
+}
 
 };
 
 recognition.start();
 }
-
 </script>
 """,
-height=80
-)
+    height=80
+    )
 
+    # Start navigation
     if st.button("Start Navigation"):
 
         destination = st.session_state.destination_input
@@ -236,7 +234,6 @@ height=80
         else:
 
             st.warning("Location or destination missing")
-
 
 # ---------------- MAIN UI ----------------
 
