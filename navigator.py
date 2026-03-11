@@ -8,31 +8,40 @@ import re
 from datetime import datetime
 
 
+# ---------------- MAP CLIENT ----------------
+
 def get_maps_client():
 
+    api_key = st.secrets.get("GOOGLE_MAPS_API_KEY")
+
+    if not api_key:
+        return None
+
     try:
-
-        api_key = st.secrets["GOOGLE_MAPS_API_KEY"]
-
         return googlemaps.Client(key=api_key)
-
     except Exception:
-
         return None
 
 
+# ---------------- CLEAN HTML ----------------
+
 def clean_html(text):
 
-    return re.sub(r"<.*?>", "", text).replace("&nbsp;", " ").strip()
+    text = re.sub(r"<.*?>", "", text)
 
+    text = text.replace("&nbsp;", " ")
+
+    return text.strip()
+
+
+# ---------------- GET DIRECTIONS ----------------
 
 def get_walking_directions(source, destination):
 
     gmaps = get_maps_client()
 
     if not gmaps:
-
-        return None, "Google Maps API key missing in Streamlit secrets."
+        return None, "Google Maps API key missing."
 
     try:
 
@@ -44,8 +53,7 @@ def get_walking_directions(source, destination):
         )
 
         if not routes:
-
-            return None, "No route found."
+            return None, "No walking route found."
 
         leg = routes[0]["legs"][0]
 
@@ -68,7 +76,9 @@ def get_walking_directions(source, destination):
 
         summary = {
             "distance": leg["distance"]["text"],
-            "duration": leg["duration"]["text"]
+            "duration": leg["duration"]["text"],
+            "start_address": leg.get("start_address"),
+            "end_address": leg.get("end_address")
         }
 
         return {"steps": steps, "summary": summary}, None
