@@ -7,3 +7,4 @@ googlemaps
 python-dotenv
 streamlit-geolocation
 av
+streamlit-autorefresh
