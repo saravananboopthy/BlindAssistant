@@ -1,6 +1,6 @@
 """
 Blind Assistant
-AI Vision + Navigation
+AI Vision + Voice Navigation
 Streamlit Cloud Compatible
 """
 
@@ -10,6 +10,7 @@ os.environ["YOLO_CONFIG_DIR"] = "/tmp"
 import streamlit as st
 import streamlit.components.v1 as components
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
+from streamlit_geolocation import streamlit_geolocation
 import av
 import cv2
 import threading
@@ -33,18 +34,16 @@ st.set_page_config(
 for key, default in {
     "lat": None,
     "lon": None,
-    "destination": "",
     "nav_steps": [],
     "nav_index": 0,
     "nav_active": False,
     "last_spoken": ""
 }.items():
-
     if key not in st.session_state:
         st.session_state[key] = default
 
 
-# ---------------- LOAD YOLO ----------------
+# ---------------- LOAD YOLO MODEL ----------------
 
 @st.cache_resource
 def load_model():
@@ -65,7 +64,7 @@ RTC_CONFIGURATION = RTCConfiguration(
 
 class BlindProcessor(VideoProcessorBase):
 
-    confidence = 0.4
+    confidence = 0.40
 
     def __init__(self):
         self.lock = threading.Lock()
@@ -104,7 +103,7 @@ class BlindProcessor(VideoProcessorBase):
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 
-# ---------------- BROWSER SPEECH ----------------
+# ---------------- TEXT TO SPEECH ----------------
 
 def browser_speak(text):
 
@@ -125,49 +124,18 @@ speechSynthesis.speak(msg);
     )
 
 
-# ---------------- GPS LOCATION ----------------
+# ---------------- LIVE GPS ----------------
 
-location = components.html(
-"""
-<script>
-navigator.geolocation.getCurrentPosition(function(pos){
-    const coords = pos.coords.latitude + "," + pos.coords.longitude;
-    window.parent.postMessage({lat:pos.coords.latitude, lon:pos.coords.longitude},"*");
-});
-</script>
-""",
-height=0
-)
+location = streamlit_geolocation()
 
+if location:
 
-# ---------------- VOICE DESTINATION ----------------
+    st.session_state.lat = location["latitude"]
+    st.session_state.lon = location["longitude"]
 
-voice = components.html(
-"""
-<button onclick="start()">🎤 Speak Destination</button>
-
-<script>
-
-function start(){
-
-  const r = new webkitSpeechRecognition();
-  r.lang="en-US";
-
-  r.onresult=function(e){
-
-     const text = e.results[0][0].transcript;
-
-     window.parent.postMessage({dest:text},"*");
-
-  };
-
-  r.start();
-}
-
-</script>
-""",
-height=100
-)
+    st.sidebar.success(
+        f"Live Location: {st.session_state.lat:.5f}, {st.session_state.lon:.5f}"
+    )
 
 
 # ---------------- SIDEBAR ----------------
@@ -176,20 +144,48 @@ with st.sidebar:
 
     st.title("Blind Assistant")
 
-    confidence = st.slider("Detection Confidence", 0.1,1.0,0.4)
+    confidence = st.slider("Detection Confidence", 0.1, 1.0, 0.4)
 
     st.divider()
 
     st.subheader("Navigation")
 
-    destination = st.text_input(
-        "Destination",
-        value=st.session_state.destination
+    destination = st.text_input("Destination")
+
+    # Voice input button
+    components.html(
+    """
+<button onclick="startSpeech()">🎤 Speak Destination</button>
+
+<script>
+function startSpeech(){
+
+    const recognition = new webkitSpeechRecognition();
+    recognition.lang="en-US";
+
+    recognition.onresult=function(event){
+
+        const text = event.results[0][0].transcript;
+
+        const inputs = window.parent.document.querySelectorAll("input");
+
+        if(inputs.length>0){
+            inputs[0].value=text;
+            inputs[0].dispatchEvent(new Event('input',{bubbles:true}));
+        }
+
+    };
+
+    recognition.start();
+}
+</script>
+""",
+    height=80
     )
 
     if st.button("Start Navigation"):
 
-        if st.session_state.lat and destination:
+        if st.session_state.lat and st.session_state.lon and destination:
 
             source = f"{st.session_state.lat},{st.session_state.lon}"
 
@@ -202,9 +198,11 @@ with st.sidebar:
                 st.session_state.nav_active = True
 
             else:
+
                 st.error(error)
 
         else:
+
             st.warning("Location or destination missing")
 
 
@@ -220,7 +218,7 @@ col1, col2 = st.columns([3,2])
 with col1:
 
     ctx = webrtc_streamer(
-        key="blind",
+        key="blind-assistant",
         rtc_configuration=RTC_CONFIGURATION,
         video_processor_factory=BlindProcessor,
         media_stream_constraints={"video":True,"audio":False},
@@ -271,14 +269,14 @@ if st.session_state.nav_active:
 
     st.success(step["text"])
 
-    c1,c2 = st.columns(2)
+    colA,colB = st.columns(2)
 
-    if c1.button("Previous") and idx>0:
+    if colA.button("Previous") and idx>0:
 
         st.session_state.nav_index -=1
         st.rerun()
 
-    if c2.button("Next") and idx < len(steps)-1:
+    if colB.button("Next") and idx < len(steps)-1:
 
         st.session_state.nav_index +=1
         st.rerun()
