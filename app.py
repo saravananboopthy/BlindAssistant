@@ -40,16 +40,16 @@ defaults = {
     "last_spoken": ""
 }
 
-for k,v in defaults.items():
+for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
 
-# ---------------- LOAD YOLO ----------------
+# ---------------- LOAD YOLO MODEL ----------------
 
 @st.cache_resource
 def load_model():
-    return YOLO("yolov8n.pt")
+    return YOLO("yolov8n")
 
 model = load_model()
 
@@ -81,17 +81,17 @@ class BlindProcessor(VideoProcessorBase):
 
         for box in results.boxes:
 
-            x1,y1,x2,y2 = map(int, box.xyxy[0])
+            x1, y1, x2, y2 = map(int, box.xyxy[0])
             label = model.names[int(box.cls[0])]
 
             detected.append(label)
 
-            cv2.rectangle(img,(x1,y1),(x2,y2),(0,255,0),2)
+            cv2.rectangle(img, (x1,y1), (x2,y2), (0,255,0), 2)
 
             cv2.putText(
                 img,
                 label,
-                (x1,y1-10),
+                (x1, y1-10),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.6,
                 (0,255,0),
@@ -101,7 +101,7 @@ class BlindProcessor(VideoProcessorBase):
         with self.lock:
             self.detections = dict(Counter(detected))
 
-        return av.VideoFrame.from_ndarray(img,format="bgr24")
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 
 # ---------------- SPEECH OUTPUT ----------------
@@ -114,24 +114,22 @@ def browser_speak(text):
     st.session_state.last_spoken = text
 
     components.html(
-    f"""
+        f"""
 <script>
 var msg = new SpeechSynthesisUtterance("{text}");
 speechSynthesis.cancel();
 speechSynthesis.speak(msg);
 </script>
 """,
-    height=0
+        height=0
     )
 
 
-# ---------------- LIVE LOCATION ----------------
-
-# ---------------- LIVE GPS ----------------
+# ---------------- GPS LOCATION ----------------
 
 location = streamlit_geolocation()
 
-if location is not None:
+if location:
 
     lat = location.get("latitude")
     lon = location.get("longitude")
@@ -141,18 +139,6 @@ if location is not None:
         st.session_state.lat = float(lat)
         st.session_state.lon = float(lon)
 
-        st.sidebar.success(
-            f"Live Location: {st.session_state.lat:.5f}, {st.session_state.lon:.5f}"
-        )
-
-    else:
-
-        st.sidebar.info("Waiting for GPS permission...")
-
-else:
-
-    st.sidebar.info("Allow location access in your browser.")
-# ---------------- SIDEBAR ----------------
 
 # ---------------- SIDEBAR ----------------
 
@@ -160,61 +146,71 @@ with st.sidebar:
 
     st.title("Blind Assistant")
 
-    confidence = st.slider("Detection Confidence", 0.1, 1.0, 0.4)
+    st.divider()
+
+    st.subheader("Live Location")
+
+    if st.session_state.lat is not None:
+
+        st.success(
+            f"{st.session_state.lat:.5f}, {st.session_state.lon:.5f}"
+        )
+
+    else:
+
+        st.info("Allow browser location access")
+
 
     st.divider()
 
     st.subheader("Navigation")
 
-    # Show location status
-    if st.session_state.lat is not None and st.session_state.lon is not None:
-
-        st.success(
-            f"Live Location:\n{st.session_state.lat:.5f}, {st.session_state.lon:.5f}"
-        )
-
-    else:
-
-        st.info("Waiting for location permission...")
-
     destination = st.text_input("Destination")
 
-    # Voice input button
+
+    # 🎤 voice destination
+
     components.html(
         """
 <button onclick="startSpeech()">🎤 Speak Destination</button>
 
 <script>
+
 function startSpeech(){
 
-    const recognition = new webkitSpeechRecognition();
-    recognition.lang = "en-US";
+const recognition = new webkitSpeechRecognition();
 
-    recognition.onresult = function(event){
+recognition.lang="en-US";
 
-        const text = event.results[0][0].transcript;
+recognition.onresult=function(event){
 
-        const inputs = window.parent.document.querySelectorAll("input");
+const text = event.results[0][0].transcript;
 
-        if(inputs.length > 0){
+const inputs = window.parent.document.querySelectorAll("input");
 
-            inputs[0].value = text;
-            inputs[0].dispatchEvent(new Event("input",{bubbles:true}));
+if(inputs.length>0){
 
-        }
+inputs[0].value = text;
 
-    };
+inputs[0].dispatchEvent(new Event("input",{bubbles:true}));
 
-    recognition.start();
 }
+
+};
+
+recognition.start();
+
+}
+
 </script>
 """,
         height=80
     )
 
+
     if st.button("Start Navigation"):
 
-        if st.session_state.lat is not None and destination:
+        if st.session_state.lat and destination:
 
             source = f"{st.session_state.lat},{st.session_state.lon}"
 
@@ -233,11 +229,13 @@ function startSpeech(){
         else:
 
             st.warning("Location or destination missing")
+
+
 # ---------------- MAIN UI ----------------
 
 st.title("👁 Blind Assistant")
 
-col1,col2 = st.columns([3,2])
+col1, col2 = st.columns([3,2])
 
 
 # CAMERA
