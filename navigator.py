@@ -1,11 +1,11 @@
 """
 Google Maps walking navigation helper
+Reliable version
 """
 
 import streamlit as st
 import googlemaps
 import re
-from datetime import datetime
 
 
 # ---------------- MAP CLIENT ----------------
@@ -33,6 +33,18 @@ def clean_html(text):
     return text.strip()
 
 
+# ---------------- FORMAT SOURCE ----------------
+
+def format_source(source):
+    """
+    Ensures coordinates are valid string format
+    """
+    if isinstance(source, (list, tuple)):
+        return f"{source[0]},{source[1]}"
+
+    return str(source)
+
+
 # ---------------- DIRECTIONS ----------------
 
 def get_walking_directions(source, destination):
@@ -44,11 +56,14 @@ def get_walking_directions(source, destination):
 
     try:
 
+        # Ensure proper format
+        source = format_source(source)
+        destination = str(destination)
+
         routes = gmaps.directions(
             source,
             destination,
-            mode="walking",
-            departure_time=datetime.now()
+            mode="walking"
         )
 
         if not routes:
@@ -62,6 +77,7 @@ def get_walking_directions(source, destination):
 
             dist = int(s["distance"]["value"])
 
+            # skip tiny instructions
             if dist < 5:
                 continue
 
@@ -81,6 +97,10 @@ def get_walking_directions(source, destination):
         }
 
         return {"steps": steps, "summary": summary}, None
+
+    except googlemaps.exceptions.ApiError as e:
+
+        return None, f"Google Maps API error: {str(e)}"
 
     except Exception as e:
 
