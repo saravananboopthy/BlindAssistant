@@ -45,7 +45,7 @@ for k, v in defaults.items():
         st.session_state[k] = v
 
 
-# ---------------- LOAD YOLO MODEL ----------------
+# ---------------- LOAD YOLO ----------------
 
 @st.cache_resource
 def load_model():
@@ -86,12 +86,12 @@ class BlindProcessor(VideoProcessorBase):
 
             detected.append(label)
 
-            cv2.rectangle(img, (x1,y1), (x2,y2), (0,255,0), 2)
+            cv2.rectangle(img, (x1, y1), (x2, y2), (0,255,0), 2)
 
             cv2.putText(
                 img,
                 label,
-                (x1, y1-10),
+                (x1, y1 - 10),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.6,
                 (0,255,0),
@@ -125,7 +125,7 @@ speechSynthesis.speak(msg);
     )
 
 
-# ---------------- GPS LOCATION ----------------
+# ---------------- LIVE GPS ----------------
 
 location = streamlit_geolocation()
 
@@ -148,30 +148,29 @@ with st.sidebar:
 
     st.divider()
 
-    st.subheader("Live Location")
+    st.subheader("📍 Live GPS")
 
     if st.session_state.lat is not None:
 
         st.success(
-            f"{st.session_state.lat:.5f}, {st.session_state.lon:.5f}"
+            f"Latitude: {st.session_state.lat:.5f}\nLongitude: {st.session_state.lon:.5f}"
         )
 
     else:
 
-        st.info("Allow browser location access")
+        st.warning("Waiting for location permission")
 
 
     st.divider()
 
-    st.subheader("Navigation")
+    st.subheader("🧭 Navigation")
 
     destination = st.text_input("Destination")
 
 
-    # 🎤 voice destination
-
+    # Voice input button
     components.html(
-        """
+"""
 <button onclick="startSpeech()">🎤 Speak Destination</button>
 
 <script>
@@ -190,7 +189,7 @@ const inputs = window.parent.document.querySelectorAll("input");
 
 if(inputs.length>0){
 
-inputs[0].value = text;
+inputs[0].value=text;
 
 inputs[0].dispatchEvent(new Event("input",{bubbles:true}));
 
@@ -204,13 +203,13 @@ recognition.start();
 
 </script>
 """,
-        height=80
+height=80
     )
 
 
     if st.button("Start Navigation"):
 
-        if st.session_state.lat and destination:
+        if st.session_state.lat is not None and destination:
 
             source = f"{st.session_state.lat},{st.session_state.lon}"
 
@@ -270,7 +269,9 @@ with col2:
 
             st.write(text)
 
-            browser_speak(text)
+            if text != st.session_state.last_spoken:
+
+                browser_speak(text)
 
         else:
 
@@ -294,14 +295,14 @@ if st.session_state.nav_active:
 
     st.success(step["text"])
 
-    c1,c2 = st.columns(2)
+    c1, c2 = st.columns(2)
 
-    if c1.button("Previous") and idx>0:
+    if c1.button("Previous") and idx > 0:
 
-        st.session_state.nav_index -=1
+        st.session_state.nav_index -= 1
         st.rerun()
 
-    if c2.button("Next") and idx < len(steps)-1:
+    if c2.button("Next") and idx < len(steps) - 1:
 
-        st.session_state.nav_index +=1
+        st.session_state.nav_index += 1
         st.rerun()
