@@ -6,7 +6,7 @@ Streamlit Cloud Compatible
 
 import os
 os.environ["YOLO_CONFIG_DIR"] = "/tmp"
-
+from navigator import get_walking_directions
 import streamlit as st
 import streamlit.components.v1 as components
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
