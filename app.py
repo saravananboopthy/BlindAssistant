@@ -127,6 +127,8 @@ speechSynthesis.speak(msg);
 
 # ---------------- LIVE LOCATION ----------------
 
+# ---------------- LIVE GPS ----------------
+
 location = streamlit_geolocation()
 
 if location is not None:
@@ -135,10 +137,21 @@ if location is not None:
     lon = location.get("longitude")
 
     if lat is not None and lon is not None:
+
         st.session_state.lat = float(lat)
         st.session_state.lon = float(lon)
 
+        st.sidebar.success(
+            f"Live Location: {st.session_state.lat:.5f}, {st.session_state.lon:.5f}"
+        )
 
+    else:
+
+        st.sidebar.info("Waiting for GPS permission...")
+
+else:
+
+    st.sidebar.info("Allow location access in your browser.")
 # ---------------- SIDEBAR ----------------
 
 with st.sidebar:
