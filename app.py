@@ -11,6 +11,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
 from streamlit_geolocation import streamlit_geolocation
+from streamlit_autorefresh import st_autorefresh
 import av
 import cv2
 import threading
@@ -27,6 +28,11 @@ st.set_page_config(
     page_icon="👁️",
     layout="wide"
 )
+
+
+# ---------------- AUTO REFRESH ----------------
+# refresh every 3 seconds to update GPS and UI
+st_autorefresh(interval=3000, key="refresh")
 
 
 # ---------------- SESSION STATE ----------------
@@ -86,12 +92,12 @@ class BlindProcessor(VideoProcessorBase):
 
             detected.append(label)
 
-            cv2.rectangle(img, (x1, y1), (x2, y2), (0,255,0), 2)
+            cv2.rectangle(img, (x1,y1), (x2,y2), (0,255,0), 2)
 
             cv2.putText(
                 img,
                 label,
-                (x1, y1 - 10),
+                (x1,y1-10),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.6,
                 (0,255,0),
@@ -104,7 +110,7 @@ class BlindProcessor(VideoProcessorBase):
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 
-# ---------------- SPEECH OUTPUT ----------------
+# ---------------- SPEECH ----------------
 
 def browser_speak(text):
 
@@ -116,7 +122,10 @@ def browser_speak(text):
     components.html(
         f"""
 <script>
-var msg = new SpeechSynthesisUtterance("{text}");
+const msg = new SpeechSynthesisUtterance("{text}");
+msg.rate = 1.2;
+msg.pitch = 1;
+msg.volume = 1;
 speechSynthesis.cancel();
 speechSynthesis.speak(msg);
 </script>
@@ -125,7 +134,7 @@ speechSynthesis.speak(msg);
     )
 
 
-# ---------------- LIVE GPS ----------------
+# ---------------- GPS LOCATION ----------------
 
 location = streamlit_geolocation()
 
@@ -134,7 +143,7 @@ if location:
     lat = location.get("latitude")
     lon = location.get("longitude")
 
-    if lat is not None and lon is not None:
+    if lat and lon:
 
         st.session_state.lat = float(lat)
         st.session_state.lon = float(lon)
@@ -148,27 +157,27 @@ with st.sidebar:
 
     st.divider()
 
-    st.subheader("📍 Live GPS")
+    st.subheader("📍 Live Location")
 
-    if st.session_state.lat is not None:
+    if st.session_state.lat:
 
         st.success(
-            f"Latitude: {st.session_state.lat:.5f}\nLongitude: {st.session_state.lon:.5f}"
+            f"{st.session_state.lat:.5f}, {st.session_state.lon:.5f}"
         )
 
     else:
 
-        st.warning("Waiting for location permission")
+        st.warning("Allow location permission in browser")
 
 
     st.divider()
 
-    st.subheader("🧭 Navigation")
+    st.subheader("Navigation")
 
     destination = st.text_input("Destination")
 
 
-    # Voice input button
+    # voice destination
     components.html(
 """
 <button onclick="startSpeech()">🎤 Speak Destination</button>
@@ -190,7 +199,6 @@ const inputs = window.parent.document.querySelectorAll("input");
 if(inputs.length>0){
 
 inputs[0].value=text;
-
 inputs[0].dispatchEvent(new Event("input",{bubbles:true}));
 
 }
@@ -209,7 +217,7 @@ height=80
 
     if st.button("Start Navigation"):
 
-        if st.session_state.lat is not None and destination:
+        if st.session_state.lat and destination:
 
             source = f"{st.session_state.lat},{st.session_state.lon}"
 
@@ -269,9 +277,7 @@ with col2:
 
             st.write(text)
 
-            if text != st.session_state.last_spoken:
-
-                browser_speak(text)
+            browser_speak(text)
 
         else:
 
@@ -297,12 +303,12 @@ if st.session_state.nav_active:
 
     c1, c2 = st.columns(2)
 
-    if c1.button("Previous") and idx > 0:
+    if c1.button("Previous") and idx>0:
 
         st.session_state.nav_index -= 1
         st.rerun()
 
-    if c2.button("Next") and idx < len(steps) - 1:
+    if c2.button("Next") and idx < len(steps)-1:
 
         st.session_state.nav_index += 1
         st.rerun()
