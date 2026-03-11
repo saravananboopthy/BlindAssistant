@@ -1,7 +1,7 @@
 """
 Blind Assistant
-AI Vision + Voice Navigation
-Streamlit Cloud Version
+AI Vision + Navigation
+Streamlit Cloud Compatible
 """
 
 import os
@@ -12,7 +12,6 @@ import streamlit.components.v1 as components
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
 import av
 import cv2
-import numpy as np
 import threading
 from collections import Counter
 from ultralytics import YOLO
@@ -20,9 +19,7 @@ from ultralytics import YOLO
 from navigator import get_walking_directions
 
 
-# ------------------------------------------------
-# PAGE CONFIG
-# ------------------------------------------------
+# ---------------- PAGE CONFIG ----------------
 
 st.set_page_config(
     page_title="Blind Assistant",
@@ -31,32 +28,23 @@ st.set_page_config(
 )
 
 
-# ------------------------------------------------
-# SESSION STATE
-# ------------------------------------------------
+# ---------------- SESSION STATE ----------------
 
-if "destination" not in st.session_state:
-    st.session_state.destination = ""
+for key, default in {
+    "lat": None,
+    "lon": None,
+    "destination": "",
+    "nav_steps": [],
+    "nav_index": 0,
+    "nav_active": False,
+    "last_spoken": ""
+}.items():
 
-if "lat" not in st.session_state:
-    st.session_state.lat = None
-
-if "lon" not in st.session_state:
-    st.session_state.lon = None
-
-if "nav_steps" not in st.session_state:
-    st.session_state.nav_steps = []
-
-if "nav_index" not in st.session_state:
-    st.session_state.nav_index = 0
-
-if "nav_active" not in st.session_state:
-    st.session_state.nav_active = False
+    if key not in st.session_state:
+        st.session_state[key] = default
 
 
-# ------------------------------------------------
-# LOAD YOLO MODEL
-# ------------------------------------------------
+# ---------------- LOAD YOLO ----------------
 
 @st.cache_resource
 def load_model():
@@ -66,32 +54,24 @@ def load_model():
 model = load_model()
 
 
-VEHICLE_OBJECTS = {"car", "truck", "bus", "motorcycle", "bicycle"}
-WARNING_OBJECTS = {"dog", "stop sign", "traffic light"}
-
-
-# ------------------------------------------------
-# RTC CONFIG
-# ------------------------------------------------
+# ---------------- RTC CONFIG ----------------
 
 RTC_CONFIGURATION = RTCConfiguration(
     {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
 )
 
 
-# ------------------------------------------------
-# VIDEO PROCESSOR
-# ------------------------------------------------
+# ---------------- VIDEO PROCESSOR ----------------
 
 class BlindProcessor(VideoProcessorBase):
 
-    confidence = 0.40
+    confidence = 0.4
 
     def __init__(self):
         self.lock = threading.Lock()
         self.detections = {}
 
-    def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
+    def recv(self, frame):
 
         img = frame.to_ndarray(format="bgr24")
 
@@ -102,20 +82,11 @@ class BlindProcessor(VideoProcessorBase):
         for box in results.boxes:
 
             x1, y1, x2, y2 = map(int, box.xyxy[0])
-            cls = int(box.cls[0])
-
-            label = model.names[cls]
+            label = model.names[int(box.cls[0])]
 
             detected.append(label)
 
-            if label in VEHICLE_OBJECTS:
-                color = (0, 0, 255)
-            elif label in WARNING_OBJECTS:
-                color = (0, 255, 255)
-            else:
-                color = (0, 255, 0)
-
-            cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
+            cv2.rectangle(img, (x1, y1), (x2, y2), (0,255,0), 2)
 
             cv2.putText(
                 img,
@@ -123,7 +94,7 @@ class BlindProcessor(VideoProcessorBase):
                 (x1, y1 - 10),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.6,
-                color,
+                (0,255,0),
                 2
             )
 
@@ -133,11 +104,14 @@ class BlindProcessor(VideoProcessorBase):
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 
-# ------------------------------------------------
-# TEXT TO SPEECH
-# ------------------------------------------------
+# ---------------- BROWSER SPEECH ----------------
 
 def browser_speak(text):
+
+    if text == st.session_state.last_spoken:
+        return
+
+    st.session_state.last_spoken = text
 
     components.html(
         f"""
@@ -151,82 +125,58 @@ speechSynthesis.speak(msg);
     )
 
 
-# ------------------------------------------------
-# GPS LOCATION
-# ------------------------------------------------
+# ---------------- GPS LOCATION ----------------
 
-components.html(
+location = components.html(
 """
 <script>
-
 navigator.geolocation.getCurrentPosition(function(pos){
-
-    const lat = pos.coords.latitude;
-    const lon = pos.coords.longitude;
-
-    window.parent.postMessage(
-        {type:"gps", lat:lat, lon:lon},
-        "*"
-    );
-
+    const coords = pos.coords.latitude + "," + pos.coords.longitude;
+    window.parent.postMessage({lat:pos.coords.latitude, lon:pos.coords.longitude},"*");
 });
-
 </script>
 """,
 height=0
 )
 
 
-# ------------------------------------------------
-# VOICE DESTINATION
-# ------------------------------------------------
+# ---------------- VOICE DESTINATION ----------------
 
-voice_dest = components.html(
+voice = components.html(
 """
-<button onclick="startSpeech()">🎤 Speak Destination</button>
-<p id="result"></p>
+<button onclick="start()">🎤 Speak Destination</button>
 
 <script>
 
-function startSpeech(){
+function start(){
 
-    const recognition = new webkitSpeechRecognition();
+  const r = new webkitSpeechRecognition();
+  r.lang="en-US";
 
-    recognition.lang = "en-US";
+  r.onresult=function(e){
 
-    recognition.onresult = function(event){
+     const text = e.results[0][0].transcript;
 
-        const text = event.results[0][0].transcript;
+     window.parent.postMessage({dest:text},"*");
 
-        document.getElementById("result").innerText = text;
+  };
 
-        window.parent.postMessage(
-            {type:"dest", value:text},
-            "*"
-        );
-
-    };
-
-    recognition.start();
+  r.start();
 }
 
 </script>
 """,
-height=120
+height=100
 )
 
 
-# ------------------------------------------------
-# SIDEBAR
-# ------------------------------------------------
+# ---------------- SIDEBAR ----------------
 
 with st.sidebar:
 
-    st.title("👁 Blind Assistant")
+    st.title("Blind Assistant")
 
-    confidence = st.slider("Detection Confidence", 0.1, 1.0, 0.4)
-
-    voice_enabled = st.toggle("Voice Alerts")
+    confidence = st.slider("Detection Confidence", 0.1,1.0,0.4)
 
     st.divider()
 
@@ -255,15 +205,12 @@ with st.sidebar:
                 st.error(error)
 
         else:
-
             st.warning("Location or destination missing")
 
 
-# ------------------------------------------------
-# MAIN UI
-# ------------------------------------------------
+# ---------------- MAIN UI ----------------
 
-st.title("👁️ Blind Assistant")
+st.title("👁 Blind Assistant")
 
 col1, col2 = st.columns([3,2])
 
@@ -273,7 +220,7 @@ col1, col2 = st.columns([3,2])
 with col1:
 
     ctx = webrtc_streamer(
-        key="blind-assistant",
+        key="blind",
         rtc_configuration=RTC_CONFIGURATION,
         video_processor_factory=BlindProcessor,
         media_stream_constraints={"video":True,"audio":False},
@@ -281,7 +228,7 @@ with col1:
     )
 
 
-# DETECTIONS
+# DETECTION PANEL
 
 with col2:
 
@@ -294,17 +241,13 @@ with col2:
 
         if detections:
 
-            for obj, count in detections.items():
+            text = ", ".join(
+                f"{count} {obj}" for obj,count in detections.items()
+            )
 
-                st.write(f"{count} {obj}")
+            st.write(text)
 
-            if voice_enabled:
-
-                text = ", ".join(
-                    f"{count} {obj}" for obj,count in detections.items()
-                )
-
-                browser_speak(text)
+            browser_speak(text)
 
         else:
 
@@ -315,9 +258,7 @@ with col2:
         st.info("Start camera")
 
 
-# ------------------------------------------------
-# NAVIGATION PANEL
-# ------------------------------------------------
+# ---------------- NAVIGATION ----------------
 
 if st.session_state.nav_active:
 
@@ -326,20 +267,18 @@ if st.session_state.nav_active:
     steps = st.session_state.nav_steps
     idx = st.session_state.nav_index
 
-    if steps:
+    step = steps[idx]
 
-        step = steps[idx]
+    st.success(step["text"])
 
-        st.success(step["text"])
+    c1,c2 = st.columns(2)
 
-        colA, colB = st.columns(2)
+    if c1.button("Previous") and idx>0:
 
-        if colA.button("Previous") and idx > 0:
+        st.session_state.nav_index -=1
+        st.rerun()
 
-            st.session_state.nav_index -= 1
-            st.rerun()
+    if c2.button("Next") and idx < len(steps)-1:
 
-        if colB.button("Next") and idx < len(steps)-1:
-
-            st.session_state.nav_index += 1
-            st.rerun()
+        st.session_state.nav_index +=1
+        st.rerun()
