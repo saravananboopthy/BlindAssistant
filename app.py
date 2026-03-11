@@ -43,7 +43,8 @@ defaults = {
     "nav_steps": [],
     "nav_index": 0,
     "nav_active": False,
-    "last_spoken": ""
+    "last_spoken": "",
+    "destination_input": ""
 }
 
 for k, v in defaults.items():
@@ -55,8 +56,7 @@ for k, v in defaults.items():
 
 @st.cache_resource
 def load_model():
-    return YOLO("yolov8s")   # more accurate than yolov8n
-
+    return YOLO("yolov8s")
 
 model = load_model()
 
@@ -93,12 +93,12 @@ class BlindProcessor(VideoProcessorBase):
 
             detected.append(label)
 
-            cv2.rectangle(img, (x1, y1), (x2, y2), (0,255,0), 2)
+            cv2.rectangle(img, (x1,y1), (x2,y2), (0,255,0), 2)
 
             cv2.putText(
                 img,
                 label,
-                (x1, y1-10),
+                (x1,y1-10),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.6,
                 (0,255,0),
@@ -173,17 +173,24 @@ with st.sidebar:
 
     st.subheader("Navigation")
 
-    destination = st.text_input("Destination")
+    destination = st.text_input(
+        "Destination",
+        key="destination_input"
+    )
 
+
+    # voice destination
 
     components.html(
 """
 <button onclick="startSpeech()">🎤 Speak Destination</button>
 
 <script>
+
 function startSpeech(){
 
 const recognition = new webkitSpeechRecognition();
+
 recognition.lang="en-US";
 
 recognition.onresult=function(event){
@@ -195,6 +202,7 @@ const inputs = window.parent.document.querySelectorAll("input");
 if(inputs.length>0){
 
 inputs[0].value=text;
+
 inputs[0].dispatchEvent(new Event("input",{bubbles:true}));
 
 }
@@ -204,6 +212,7 @@ inputs[0].dispatchEvent(new Event("input",{bubbles:true}));
 recognition.start();
 
 }
+
 </script>
 """,
 height=80
@@ -212,7 +221,9 @@ height=80
 
     if st.button("Start Navigation"):
 
-        if st.session_state.lat is not None and destination:
+        destination = st.session_state.destination_input
+
+        if st.session_state.lat is not None and destination.strip() != "":
 
             source = f"{st.session_state.lat},{st.session_state.lon}"
 
