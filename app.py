@@ -301,6 +301,9 @@ if st.session_state.nav_active:
 
     st.success(step["text"])
 
+    # Speak navigation instruction
+    browser_speak(step["text"])
+
     c1, c2 = st.columns(2)
 
     if c1.button("Previous") and idx > 0:
