@@ -1,0 +1,10 @@
+.env
+gem-env/
+env/
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+yolov8x.pt
+yolov10n.pt
+.streamlit/secrets.toml
