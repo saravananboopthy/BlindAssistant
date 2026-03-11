@@ -1,22 +1,16 @@
 """
-Cross-platform navigation module using Google Maps API.
-Works on any OS (no Windows-specific dependencies).
+Google Maps walking navigation helper
 """
 
-import os
+import streamlit as st
+import googlemaps
 import re
 from datetime import datetime
-from dotenv import load_dotenv
-
-load_dotenv()
 
 
 def get_maps_client():
     try:
-        import googlemaps
-        api_key = os.getenv("GOOGLE_MAPS_API_KEY")
-        if not api_key:
-            return None
+        api_key = st.secrets["GOOGLE_MAPS_API_KEY"]
         return googlemaps.Client(key=api_key)
     except Exception:
         return None
@@ -27,12 +21,14 @@ def clean_html(text):
 
 
 def get_walking_directions(source, destination):
-    """Get walking directions. Returns (result_dict, error_string)."""
+
     gmaps = get_maps_client()
+
     if not gmaps:
-        return None, "Google Maps API key not configured. Add GOOGLE_MAPS_API_KEY to secrets."
+        return None, "Google Maps API key missing in Streamlit secrets."
 
     try:
+
         routes = gmaps.directions(
             source,
             destination,
@@ -41,16 +37,21 @@ def get_walking_directions(source, destination):
         )
 
         if not routes:
-            return None, "No route found between these locations."
+            return None, "No route found."
 
         leg = routes[0]["legs"][0]
+
         steps = []
 
         for s in leg["steps"]:
+
             dist = int(s["distance"]["value"])
+
             if dist < 5:
                 continue
+
             instr = clean_html(s["html_instructions"])
+
             steps.append({
                 "instruction": instr,
                 "distance": dist,
@@ -60,8 +61,6 @@ def get_walking_directions(source, destination):
         summary = {
             "distance": leg["distance"]["text"],
             "duration": leg["duration"]["text"],
-            "start_address": leg.get("start_address", source),
-            "end_address": leg.get("end_address", destination),
         }
 
         return {"steps": steps, "summary": summary}, None
