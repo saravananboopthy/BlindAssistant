@@ -154,79 +154,71 @@ else:
     st.sidebar.info("Allow location access in your browser.")
 # ---------------- SIDEBAR ----------------
 
+# ---------------- SIDEBAR ----------------
+
 with st.sidebar:
 
     st.title("Blind Assistant")
 
-    confidence = st.slider("Detection Confidence",0.1,1.0,0.4)
+    confidence = st.slider("Detection Confidence", 0.1, 1.0, 0.4)
 
     st.divider()
 
     st.subheader("Navigation")
 
-    if st.session_state.lat:
-      if st.session_state.lat is not None:
+    # Show location status
+    if st.session_state.lat is not None and st.session_state.lon is not None:
 
-    st.sidebar.success(
-        f"Live Location:\n{st.session_state.lat:.5f}, {st.session_state.lon:.5f}"
-    )
+        st.success(
+            f"Live Location:\n{st.session_state.lat:.5f}, {st.session_state.lon:.5f}"
+        )
 
-else:
-
-    st.sidebar.info("Waiting for GPS permission...")
     else:
+
         st.info("Waiting for location permission...")
 
     destination = st.text_input("Destination")
 
-
     # Voice input button
-
     components.html(
-"""
+        """
 <button onclick="startSpeech()">🎤 Speak Destination</button>
 
 <script>
-
 function startSpeech(){
 
-const recognition = new webkitSpeechRecognition();
+    const recognition = new webkitSpeechRecognition();
+    recognition.lang = "en-US";
 
-recognition.lang="en-US";
+    recognition.onresult = function(event){
 
-recognition.onresult=function(event){
+        const text = event.results[0][0].transcript;
 
-const text = event.results[0][0].transcript;
+        const inputs = window.parent.document.querySelectorAll("input");
 
-const inputs = window.parent.document.querySelectorAll("input");
+        if(inputs.length > 0){
 
-if(inputs.length>0){
+            inputs[0].value = text;
+            inputs[0].dispatchEvent(new Event("input",{bubbles:true}));
 
-inputs[0].value = text;
+        }
 
-inputs[0].dispatchEvent(new Event("input",{bubbles:true}));
+    };
 
+    recognition.start();
 }
-
-};
-
-recognition.start();
-
-}
-
 </script>
 """,
-height=80
+        height=80
     )
-
 
     if st.button("Start Navigation"):
 
-        if st.session_state.lat and destination:
+        if st.session_state.lat is not None and destination:
 
             source = f"{st.session_state.lat},{st.session_state.lon}"
 
-            result,error = get_walking_directions(source,destination)
+            result, error = get_walking_directions(source, destination)
 
             if result:
 
@@ -241,8 +233,6 @@ height=80
         else:
 
             st.warning("Location or destination missing")
-
-
 # ---------------- MAIN UI ----------------
 
 st.title("👁 Blind Assistant")
