@@ -6,7 +6,7 @@ Streamlit Cloud Compatible
 
 import os
 os.environ["YOLO_CONFIG_DIR"] = "/tmp"
-from navigator import get_walking_directions
+
 import streamlit as st
 import streamlit.components.v1 as components
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
@@ -31,7 +31,7 @@ st.set_page_config(
 
 
 # ---------------- AUTO REFRESH ----------------
-# refresh every 3 seconds to update GPS and UI
+
 st_autorefresh(interval=3000, key="refresh")
 
 
@@ -55,7 +55,8 @@ for k, v in defaults.items():
 
 @st.cache_resource
 def load_model():
-    return YOLO("yolov8n")
+    return YOLO("yolov8s")   # more accurate than yolov8n
+
 
 model = load_model()
 
@@ -71,7 +72,7 @@ RTC_CONFIGURATION = RTCConfiguration(
 
 class BlindProcessor(VideoProcessorBase):
 
-    confidence = 0.40
+    confidence = 0.60
 
     def __init__(self):
         self.lock = threading.Lock()
@@ -92,12 +93,12 @@ class BlindProcessor(VideoProcessorBase):
 
             detected.append(label)
 
-            cv2.rectangle(img, (x1,y1), (x2,y2), (0,255,0), 2)
+            cv2.rectangle(img, (x1, y1), (x2, y2), (0,255,0), 2)
 
             cv2.putText(
                 img,
                 label,
-                (x1,y1-10),
+                (x1, y1-10),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.6,
                 (0,255,0),
@@ -124,8 +125,6 @@ def browser_speak(text):
 <script>
 const msg = new SpeechSynthesisUtterance("{text}");
 msg.rate = 1.2;
-msg.pitch = 1;
-msg.volume = 1;
 speechSynthesis.cancel();
 speechSynthesis.speak(msg);
 </script>
@@ -143,7 +142,7 @@ if location:
     lat = location.get("latitude")
     lon = location.get("longitude")
 
-    if lat and lon:
+    if lat is not None and lon is not None:
 
         st.session_state.lat = float(lat)
         st.session_state.lon = float(lon)
@@ -159,7 +158,7 @@ with st.sidebar:
 
     st.subheader("📍 Live Location")
 
-    if st.session_state.lat:
+    if st.session_state.lat is not None:
 
         st.success(
             f"{st.session_state.lat:.5f}, {st.session_state.lon:.5f}"
@@ -177,17 +176,14 @@ with st.sidebar:
     destination = st.text_input("Destination")
 
 
-    # voice destination
     components.html(
 """
 <button onclick="startSpeech()">🎤 Speak Destination</button>
 
 <script>
-
 function startSpeech(){
 
 const recognition = new webkitSpeechRecognition();
-
 recognition.lang="en-US";
 
 recognition.onresult=function(event){
@@ -208,7 +204,6 @@ inputs[0].dispatchEvent(new Event("input",{bubbles:true}));
 recognition.start();
 
 }
-
 </script>
 """,
 height=80
@@ -217,7 +212,7 @@ height=80
 
     if st.button("Start Navigation"):
 
-        if st.session_state.lat and destination:
+        if st.session_state.lat is not None and destination:
 
             source = f"{st.session_state.lat},{st.session_state.lon}"
 
@@ -303,7 +298,7 @@ if st.session_state.nav_active:
 
     c1, c2 = st.columns(2)
 
-    if c1.button("Previous") and idx>0:
+    if c1.button("Previous") and idx > 0:
 
         st.session_state.nav_index -= 1
         st.rerun()
