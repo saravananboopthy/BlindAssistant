@@ -152,9 +152,15 @@ with st.sidebar:
     st.subheader("Navigation")
 
     if st.session_state.lat:
-        st.success(
-            f"Live Location:\n{st.session_state.lat:.5f}, {st.session_state.lon:.5f}"
-        )
+      if st.session_state.lat is not None:
+
+    st.sidebar.success(
+        f"Live Location:\n{st.session_state.lat:.5f}, {st.session_state.lon:.5f}"
+    )
+
+else:
+
+    st.sidebar.info("Waiting for GPS permission...")
     else:
         st.info("Waiting for location permission...")
 
