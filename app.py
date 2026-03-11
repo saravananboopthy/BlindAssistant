@@ -129,14 +129,14 @@ speechSynthesis.speak(msg);
 
 location = streamlit_geolocation()
 
-if location:
+if location is not None:
 
     lat = location.get("latitude")
     lon = location.get("longitude")
 
-    if lat and lon:
-        st.session_state.lat = lat
-        st.session_state.lon = lon
+    if lat is not None and lon is not None:
+        st.session_state.lat = float(lat)
+        st.session_state.lon = float(lon)
 
 
 # ---------------- SIDEBAR ----------------
