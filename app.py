@@ -291,6 +291,23 @@ with col2:
 # ---------------- NAVIGATION ----------------
 # ---------------- NAVIGATION ----------------
 
+import math
+
+def distance_meters(lat1, lon1, lat2, lon2):
+
+    R = 6371000
+
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+
+    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+
+    return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1-a))
+
+
 if st.session_state.nav_active:
 
     st.divider()
@@ -298,24 +315,30 @@ if st.session_state.nav_active:
     steps = st.session_state.nav_steps
     idx = st.session_state.nav_index
 
-    step = steps[idx]
+    if idx < len(steps):
 
-    st.success(step["text"])
+        step = steps[idx]
 
-    # Speak navigation instruction only once
-    if step["text"] != st.session_state.last_spoken:
-        browser_speak(step["text"])
+        st.success(step["text"])
 
-    c1, c2 = st.columns(2)
+        if st.session_state.lat is not None:
 
-    if c1.button("Previous") and idx > 0:
+            distance = distance_meters(
+                st.session_state.lat,
+                st.session_state.lon,
+                step["lat"],
+                step["lon"]
+            )
 
-        st.session_state.nav_index -= 1
-        st.session_state.last_spoken = ""
-        st.rerun()
+            st.info(f"Distance to next step: {int(distance)} meters")
 
-    if c2.button("Next") and idx < len(steps)-1:
+            # Speak instruction when user reaches step
+            if distance < 20:
 
-        st.session_state.nav_index += 1
-        st.session_state.last_spoken = ""
-        st.rerun()
+                if step["text"] != st.session_state.last_spoken:
+
+                    browser_speak(step["text"])
+
+                    st.session_state.last_spoken = step["text"]
+
+                    st.session_state.nav_index += 1
