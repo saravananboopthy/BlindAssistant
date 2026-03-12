@@ -1,8 +1,8 @@
-# Gemini Live Cam – Project Guide
+BlindAssistant
 
 ## Overview
 
-Gemini Live Cam is a Python application that streams real-time audio (and optionally video or screen captures) from your device to Google Gemini using the Gemini Live API. It enables interactive conversations with Gemini via both text and voice, demonstrating how to integrate media capture, streaming, and AI-powered responses in Python.
+BlindAssistant is a Python application that streams real-time audio (and optionally video or screen captures) from your device to Google Gemini using the Gemini Live API. It enables interactive conversations with Gemini via both text and voice, demonstrating how to integrate media capture, streaming, and AI-powered responses in Python.
 
 ---
 
