@@ -30,8 +30,8 @@ st.set_page_config(
     layout="wide"
 )
 
-# refresh slower so speech can play
-st_autorefresh(interval=3000, key="refresh")
+# refresh slower so speech works
+st_autorefresh(interval=4000, key="refresh")
 
 
 # ---------------- SESSION ----------------
@@ -42,14 +42,54 @@ defaults = {
     "nav_steps": [],
     "nav_index": 0,
     "nav_active": False,
-    "last_detection": "",
-    "last_navigation": "",
-    "destination_input": ""
+    "destination_input": "",
+    "last_spoken": ""
 }
 
 for k,v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
+
+
+# ---------------- GLOBAL SPEECH ENGINE ----------------
+
+components.html(
+"""
+<script>
+
+if(!window.voiceEngine){
+
+    window.voiceEngine = function(text){
+
+        const msg = new SpeechSynthesisUtterance(text)
+
+        msg.rate = 1.1
+        msg.pitch = 1
+        msg.volume = 1
+
+        speechSynthesis.cancel()
+        speechSynthesis.speak(msg)
+
+    }
+
+}
+
+</script>
+""",
+height=0
+)
+
+
+def speak(text):
+
+    components.html(
+        f"""
+<script>
+window.voiceEngine("{text}")
+</script>
+""",
+        height=0
+    )
 
 
 # ---------------- LOAD YOLO ----------------
@@ -66,37 +106,6 @@ model = load_model()
 RTC_CONFIGURATION = RTCConfiguration(
     {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
 )
-
-
-# ---------------- SPEECH ----------------
-
-def speak(text):
-
-    components.html(
-    f"""
-<script>
-
-if(!window.voiceBusy){{
-
-    window.voiceBusy = true
-
-    const msg = new SpeechSynthesisUtterance("{text}")
-    msg.rate = 1.1
-    msg.pitch = 1
-    msg.volume = 1
-
-    msg.onend = function(){{
-        window.voiceBusy = false
-    }}
-
-    speechSynthesis.speak(msg)
-
-}}
-
-</script>
-""",
-    height=0
-    )
 
 
 # ---------------- VIDEO PROCESSOR ----------------
@@ -161,7 +170,7 @@ if location:
 
 with st.sidebar:
 
-    st.title("Blind Assistant")
+    st.title("🧭 Blind Assistant")
 
     st.divider()
 
@@ -175,8 +184,7 @@ with st.sidebar:
 
     else:
 
-        st.warning("Allow GPS in browser")
-
+        st.warning("Allow GPS permission in browser")
 
     st.divider()
 
@@ -203,6 +211,8 @@ with st.sidebar:
                 st.session_state.nav_index = 0
                 st.session_state.nav_active = True
 
+                speak("Navigation started")
+
             else:
 
                 st.error(error)
@@ -214,7 +224,7 @@ with st.sidebar:
 
 # ---------------- MAIN ----------------
 
-st.title("👁 Blind Assistant")
+st.title("👁 AI Blind Assistant")
 
 col1,col2 = st.columns([3,2])
 
@@ -251,11 +261,11 @@ with col2:
 
             st.write(text)
 
-            if text != st.session_state.last_detection:
+            if text != st.session_state.last_spoken:
 
                 speak(text)
 
-                st.session_state.last_detection = text
+                st.session_state.last_spoken = text
 
         else:
 
@@ -301,26 +311,16 @@ if st.session_state.nav_active:
                 step["lon"]
             )
 
-            st.info(f"Distance: {int(distance)} meters")
+            st.info(f"Distance to next step: {int(distance)} meters")
 
-            if distance <= 20:
+            if distance <= 25:
 
-                nav_text = step["text"]
+                speak(step["text"])
 
-                if nav_text != st.session_state.last_navigation:
-
-                    speak(nav_text)
-
-                    st.session_state.last_navigation = nav_text
-
-                    st.session_state.nav_index += 1
+                st.session_state.nav_index += 1
 
     else:
 
         st.success("Destination reached")
 
-        if st.session_state.last_navigation != "done":
-
-            speak("Destination reached")
-
-            st.session_state.last_navigation = "done"
+        speak("Destination reached")
