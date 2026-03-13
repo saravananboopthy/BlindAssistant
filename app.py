@@ -291,12 +291,12 @@ with col2:
 # ---------------- NAVIGATION ----------------
 # ---------------- NAVIGATION ----------------
 
+# ---------------- NAVIGATION ----------------
+
 import math
 
 def distance_meters(lat1, lon1, lat2, lon2):
-
     R = 6371000
-
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
 
@@ -332,7 +332,6 @@ if st.session_state.nav_active:
 
             st.info(f"Distance to next step: {int(distance)} meters")
 
-            # Speak instruction when user reaches step
             if distance < 20:
 
                 if step["text"] != st.session_state.last_spoken:
