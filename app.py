@@ -17,6 +17,7 @@ import cv2
 import threading
 from collections import Counter
 from ultralytics import YOLO
+import math
 
 from navigator import get_walking_directions
 
@@ -32,7 +33,7 @@ st.set_page_config(
 
 # ---------------- AUTO REFRESH ----------------
 
-st_autorefresh(interval=10000, key="refresh")
+st_autorefresh(interval=2000, key="refresh")
 
 
 # ---------------- SESSION STATE ----------------
@@ -115,18 +116,20 @@ class BlindProcessor(VideoProcessorBase):
 
 def browser_speak(text):
 
-    if text == st.session_state.last_spoken:
-        return
-
-    st.session_state.last_spoken = text
-
     components.html(
         f"""
 <script>
-const msg = new SpeechSynthesisUtterance("{text}");
-msg.rate = 1.2;
-speechSynthesis.cancel();
-speechSynthesis.speak(msg);
+
+function speak(text){{
+    const msg = new SpeechSynthesisUtterance(text);
+    msg.rate = 1.1;
+    msg.pitch = 1;
+    msg.volume = 1;
+    window.speechSynthesis.speak(msg);
+}}
+
+speak("{text}")
+
 </script>
 """,
         height=0
@@ -177,7 +180,6 @@ with st.sidebar:
         key="destination_input"
     )
 
-    # Voice destination
     components.html(
 """
 <button onclick="startSpeech()">🎤 Speak Destination</button>
@@ -277,7 +279,9 @@ with col2:
 
             st.write(text)
 
-            browser_speak(text)
+            if text != st.session_state.last_spoken:
+                browser_speak(text)
+                st.session_state.last_spoken = text
 
         else:
 
@@ -289,14 +293,11 @@ with col2:
 
 
 # ---------------- NAVIGATION ----------------
-# ---------------- NAVIGATION ----------------
-
-# ---------------- NAVIGATION ----------------
-
-import math
 
 def distance_meters(lat1, lon1, lat2, lon2):
+
     R = 6371000
+
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
 
@@ -332,12 +333,22 @@ if st.session_state.nav_active:
 
             st.info(f"Distance to next step: {int(distance)} meters")
 
-            if distance < 20:
+            if distance < 25:
 
-                if step["text"] != st.session_state.last_spoken:
+                nav_text = "Navigation: " + step["text"]
 
-                    browser_speak(step["text"])
+                if nav_text != st.session_state.last_spoken:
 
-                    st.session_state.last_spoken = step["text"]
+                    browser_speak(nav_text)
+
+                    st.session_state.last_spoken = nav_text
 
                     st.session_state.nav_index += 1
+
+    else:
+
+        st.success("Destination reached")
+
+        if "Destination reached" != st.session_state.last_spoken:
+            browser_speak("Destination reached")
+            st.session_state.last_spoken = "Destination reached"
