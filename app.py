@@ -30,8 +30,8 @@ st.set_page_config(
     layout="wide"
 )
 
-# fast refresh
-st_autorefresh(interval=1200, key="refresh")
+# refresh slower so speech can play
+st_autorefresh(interval=3000, key="refresh")
 
 
 # ---------------- SESSION ----------------
@@ -75,13 +75,24 @@ def speak(text):
     components.html(
     f"""
 <script>
-if(!window.speechSynthesis.speaking){{
-    const msg = new SpeechSynthesisUtterance("{text}");
-    msg.rate = 1.15;
-    msg.pitch = 1;
-    msg.volume = 1;
-    speechSynthesis.speak(msg);
+
+if(!window.voiceBusy){{
+
+    window.voiceBusy = true
+
+    const msg = new SpeechSynthesisUtterance("{text}")
+    msg.rate = 1.1
+    msg.pitch = 1
+    msg.volume = 1
+
+    msg.onend = function(){{
+        window.voiceBusy = false
+    }}
+
+    speechSynthesis.speak(msg)
+
 }}
+
 </script>
 """,
     height=0
