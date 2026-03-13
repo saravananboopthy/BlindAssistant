@@ -1,7 +1,6 @@
 """
 Blind Assistant
 AI Vision + Voice Navigation
-Streamlit Cloud Compatible
 """
 
 import os
@@ -11,7 +10,6 @@ import streamlit as st
 import streamlit.components.v1 as components
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
 from streamlit_geolocation import streamlit_geolocation
-from streamlit_autorefresh import st_autorefresh
 import av
 import cv2
 import threading
@@ -30,9 +28,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# refresh slower so speech works
-st_autorefresh(interval=4000, key="refresh")
-
 
 # ---------------- SESSION ----------------
 
@@ -42,8 +37,9 @@ defaults = {
     "nav_steps": [],
     "nav_index": 0,
     "nav_active": False,
-    "destination_input": "",
-    "last_spoken": ""
+    "last_detection": "",
+    "last_navigation": "",
+    "destination_input": ""
 }
 
 for k,v in defaults.items():
@@ -51,41 +47,22 @@ for k,v in defaults.items():
         st.session_state[k] = v
 
 
-# ---------------- GLOBAL SPEECH ENGINE ----------------
-
-components.html(
-"""
-<script>
-
-if(!window.voiceEngine){
-
-    window.voiceEngine = function(text){
-
-        const msg = new SpeechSynthesisUtterance(text)
-
-        msg.rate = 1.1
-        msg.pitch = 1
-        msg.volume = 1
-
-        speechSynthesis.cancel()
-        speechSynthesis.speak(msg)
-
-    }
-
-}
-
-</script>
-""",
-height=0
-)
-
+# ---------------- SPEECH ----------------
 
 def speak(text):
 
     components.html(
         f"""
 <script>
-window.voiceEngine("{text}")
+
+const msg = new SpeechSynthesisUtterance("{text}");
+msg.rate = 1.1;
+msg.pitch = 1;
+msg.volume = 1;
+
+speechSynthesis.cancel();
+speechSynthesis.speak(msg);
+
 </script>
 """,
         height=0
@@ -170,9 +147,7 @@ if location:
 
 with st.sidebar:
 
-    st.title("🧭 Blind Assistant")
-
-    st.divider()
+    st.title("Blind Assistant")
 
     st.subheader("📍 Live Location")
 
@@ -184,9 +159,7 @@ with st.sidebar:
 
     else:
 
-        st.warning("Allow GPS permission in browser")
-
-    st.divider()
+        st.warning("Allow location permission")
 
     st.subheader("Navigation")
 
@@ -224,7 +197,7 @@ with st.sidebar:
 
 # ---------------- MAIN ----------------
 
-st.title("👁 AI Blind Assistant")
+st.title("👁 Blind Assistant")
 
 col1,col2 = st.columns([3,2])
 
@@ -261,11 +234,11 @@ with col2:
 
             st.write(text)
 
-            if text != st.session_state.last_spoken:
+            if text != st.session_state.last_detection:
 
                 speak(text)
 
-                st.session_state.last_spoken = text
+                st.session_state.last_detection = text
 
         else:
 
@@ -311,13 +284,19 @@ if st.session_state.nav_active:
                 step["lon"]
             )
 
-            st.info(f"Distance to next step: {int(distance)} meters")
+            st.info(f"Distance: {int(distance)} meters")
 
-            if distance <= 25:
+            if distance <= 20:
 
-                speak(step["text"])
+                nav_text = step["text"]
 
-                st.session_state.nav_index += 1
+                if nav_text != st.session_state.last_navigation:
+
+                    speak(nav_text)
+
+                    st.session_state.last_navigation = nav_text
+
+                    st.session_state.nav_index += 1
 
     else:
 
