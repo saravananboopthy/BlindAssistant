@@ -83,7 +83,7 @@ def get_walking_directions(source, destination):
 
             instr = clean_html(s["html_instructions"])
 
-         steps.append({
+      steps.append({
     "instruction": instr,
     "distance": dist,
     "text": f"{instr} for {dist} meters",
