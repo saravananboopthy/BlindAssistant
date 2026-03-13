@@ -33,7 +33,7 @@ st.set_page_config(
 
 # ---------------- AUTO REFRESH ----------------
 
-st_autorefresh(interval=2000, key="refresh")
+st_autorefresh(interval=1500, key="refresh")
 
 
 # ---------------- SESSION STATE ----------------
@@ -45,6 +45,7 @@ defaults = {
     "nav_index": 0,
     "nav_active": False,
     "last_spoken": "",
+    "last_nav_spoken": "",
     "destination_input": ""
 }
 
@@ -119,17 +120,11 @@ def browser_speak(text):
     components.html(
         f"""
 <script>
-
-function speak(text){{
-    const msg = new SpeechSynthesisUtterance(text);
-    msg.rate = 1.1;
-    msg.pitch = 1;
-    msg.volume = 1;
-    window.speechSynthesis.speak(msg);
-}}
-
-speak("{text}")
-
+const msg = new SpeechSynthesisUtterance("{text}");
+msg.rate = 1.1;
+msg.pitch = 1;
+msg.volume = 1;
+window.speechSynthesis.speak(msg);
 </script>
 """,
         height=0
@@ -185,31 +180,23 @@ with st.sidebar:
 <button onclick="startSpeech()">🎤 Speak Destination</button>
 
 <script>
-
 function startSpeech(){
-
 const recognition = new webkitSpeechRecognition();
 recognition.lang="en-US";
 
 recognition.onresult=function(event){
-
 const text = event.results[0][0].transcript;
 
 const inputs = window.parent.document.querySelectorAll("input");
 
 if(inputs.length>0){
-
 inputs[0].value = text;
 inputs[0].dispatchEvent(new Event("input",{bubbles:true}));
-
 }
-
 };
 
 recognition.start();
-
 }
-
 </script>
 """,
 height=80
@@ -271,21 +258,21 @@ with col2:
         with ctx.video_processor.lock:
             detections = ctx.video_processor.detections.copy()
 
-        if detections:
+        important = {"person","car","bus","truck","bicycle","motorcycle","dog"}
 
-            text = ", ".join(
-                f"{count} {obj}" for obj,count in detections.items()
-            )
+        filtered = []
 
-            st.write(text)
+        for obj,count in detections.items():
+            if obj in important:
+                filtered.append(f"{count} {obj}")
 
-            if text != st.session_state.last_spoken:
-                browser_speak(text)
-                st.session_state.last_spoken = text
+        text = ", ".join(filtered)
 
-        else:
+        st.write(text)
 
-            st.info("No objects detected")
+        if text and text != st.session_state.last_spoken:
+            browser_speak(text)
+            st.session_state.last_spoken = text
 
     else:
 
@@ -333,15 +320,15 @@ if st.session_state.nav_active:
 
             st.info(f"Distance to next step: {int(distance)} meters")
 
-            if distance < 25:
+            if distance <= 25:
 
-                nav_text = "Navigation: " + step["text"]
+                nav_text = "Navigation " + step["text"]
 
-                if nav_text != st.session_state.last_spoken:
+                if nav_text != st.session_state.last_nav_spoken:
 
                     browser_speak(nav_text)
 
-                    st.session_state.last_spoken = nav_text
+                    st.session_state.last_nav_spoken = nav_text
 
                     st.session_state.nav_index += 1
 
@@ -349,6 +336,6 @@ if st.session_state.nav_active:
 
         st.success("Destination reached")
 
-        if "Destination reached" != st.session_state.last_spoken:
+        if "Destination reached" != st.session_state.last_nav_spoken:
             browser_speak("Destination reached")
-            st.session_state.last_spoken = "Destination reached"
+            st.session_state.last_nav_spoken = "Destination reached"
