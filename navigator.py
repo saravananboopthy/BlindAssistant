@@ -1,6 +1,5 @@
 """
 Google Maps walking navigation helper
-Reliable version
 """
 
 import streamlit as st
@@ -33,18 +32,6 @@ def clean_html(text):
     return text.strip()
 
 
-# ---------------- FORMAT SOURCE ----------------
-
-def format_source(source):
-    """
-    Ensures coordinates are valid string format
-    """
-    if isinstance(source, (list, tuple)):
-        return f"{source[0]},{source[1]}"
-
-    return str(source)
-
-
 # ---------------- DIRECTIONS ----------------
 
 def get_walking_directions(source, destination):
@@ -55,10 +42,6 @@ def get_walking_directions(source, destination):
         return None, "Google Maps API key missing."
 
     try:
-
-        # Ensure proper format
-        source = format_source(source)
-        destination = str(destination)
 
         routes = gmaps.directions(
             source,
@@ -77,19 +60,18 @@ def get_walking_directions(source, destination):
 
             dist = int(s["distance"]["value"])
 
-            # skip tiny instructions
             if dist < 5:
                 continue
 
             instr = clean_html(s["html_instructions"])
 
-      steps.append({
-    "instruction": instr,
-    "distance": dist,
-    "text": f"{instr} for {dist} meters",
-    "lat": s["end_location"]["lat"],
-    "lon": s["end_location"]["lng"]
-})
+            steps.append({
+                "instruction": instr,
+                "distance": dist,
+                "text": f"{instr} for {dist} meters",
+                "lat": s["end_location"]["lat"],
+                "lon": s["end_location"]["lng"]
+            })
 
         summary = {
             "distance": leg["distance"]["text"],
@@ -99,10 +81,6 @@ def get_walking_directions(source, destination):
         }
 
         return {"steps": steps, "summary": summary}, None
-
-    except googlemaps.exceptions.ApiError as e:
-
-        return None, f"Google Maps API error: {str(e)}"
 
     except Exception as e:
 
