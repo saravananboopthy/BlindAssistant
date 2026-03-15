@@ -73,7 +73,7 @@ speechSynthesis.speak(msg);
 
 @st.cache_resource
 def load_model():
-    return YOLO("yolov8n")
+    return YOLO("yolov8n.pt")
 
 model = load_model()
 
@@ -100,8 +100,8 @@ class BlindProcessor(VideoProcessorBase):
         img = frame.to_ndarray(format="bgr24")
 
         results = model(img, conf=self.confidence, verbose=False)[0]
-
-        detected = []
+detected = []
+confidence_limit = 0.45
 
         for box in results.boxes:
 
@@ -221,7 +221,9 @@ with col2:
 
     st.subheader("Detected Objects")
 
-    if ctx.state.playing and ctx.video_processor:
+    detection_box = st.empty()
+
+    while ctx.state.playing and ctx.video_processor:
 
         with ctx.video_processor.lock:
             detections = ctx.video_processor.detections.copy()
@@ -232,7 +234,7 @@ with col2:
                 f"{count} {obj}" for obj,count in detections.items()
             )
 
-            st.write(text)
+            detection_box.success(text)
 
             if text != st.session_state.last_detection:
 
@@ -242,9 +244,9 @@ with col2:
 
         else:
 
-            st.write("Nothing detected")
+            detection_box.info("No obstacle detected")
 
-
+        time.sleep(1)
 # ---------------- NAVIGATION ----------------
 
 def distance_meters(lat1, lon1, lat2, lon2):
