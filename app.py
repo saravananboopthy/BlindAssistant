@@ -10,14 +10,15 @@ import streamlit as st
 import streamlit.components.v1 as components
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
 from streamlit_geolocation import streamlit_geolocation
+
 import av
 import cv2
 import threading
+import time
+import math
+
 from collections import Counter
 from ultralytics import YOLO
-import math
-import time
-
 from navigator import get_walking_directions
 
 
@@ -30,7 +31,7 @@ st.set_page_config(
 )
 
 
-# ---------------- SESSION ----------------
+# ---------------- SESSION STATE ----------------
 
 defaults = {
     "lat": None,
@@ -38,9 +39,10 @@ defaults = {
     "nav_steps": [],
     "nav_index": 0,
     "nav_active": False,
+    "last_detection": "",
     "last_navigation": "",
     "destination_input": "",
-    "speak_now": None
+    "speak_text": ""
 }
 
 for k,v in defaults.items():
@@ -55,10 +57,14 @@ def speak(text):
     components.html(
         f"""
 <script>
+
 const msg = new SpeechSynthesisUtterance("{text}");
 msg.rate = 1.1;
+msg.pitch = 1;
+
 speechSynthesis.cancel();
 speechSynthesis.speak(msg);
+
 </script>
 """,
         height=0
@@ -77,7 +83,7 @@ model = load_model()
 # ---------------- RTC ----------------
 
 RTC_CONFIGURATION = RTCConfiguration(
-    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+    {"iceServers":[{"urls":["stun:stun.l.google.com:19302"]}]}
 )
 
 
@@ -85,19 +91,20 @@ RTC_CONFIGURATION = RTCConfiguration(
 
 class BlindProcessor(VideoProcessorBase):
 
-    confidence = 0.45
-
     def __init__(self):
+
         self.lock = threading.Lock()
         self.detections = {}
+
         self.last_spoken = ""
         self.last_time = 0
+
 
     def recv(self, frame):
 
         img = frame.to_ndarray(format="bgr24")
 
-        results = model(img, conf=self.confidence, verbose=False)[0]
+        results = model(img, conf=0.45, verbose=False)[0]
 
         detected = []
 
@@ -128,17 +135,20 @@ class BlindProcessor(VideoProcessorBase):
         if counts:
 
             text = ", ".join(counts.keys())
+
             now = time.time()
 
-            if text != self.last_spoken and (now - self.last_time) > 0.5:
-                st.session_state.speak_now = text
+            if text != self.last_spoken and (now - self.last_time) > 1:
+
+                st.session_state.speak_text = text
+
                 self.last_spoken = text
                 self.last_time = now
 
-        return av.VideoFrame.from_ndarray(img,format="bgr24")
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 
-# ---------------- GPS ----------------
+# ---------------- LOCATION ----------------
 
 location = streamlit_geolocation()
 
@@ -171,12 +181,14 @@ with st.sidebar:
 
         st.warning("Allow location permission")
 
+
     st.subheader("Navigation")
 
     destination = st.text_input(
         "Destination",
         key="destination_input"
     )
+
 
     if st.button("Start Navigation"):
 
@@ -231,8 +243,6 @@ with col2:
 
     st.subheader("Detected Objects")
 
-    detection_box = st.empty()
-
     if ctx.state.playing and ctx.video_processor:
 
         with ctx.video_processor.lock:
@@ -244,19 +254,20 @@ with col2:
                 f"{count} {obj}" for obj,count in detections.items()
             )
 
-            detection_box.success(text)
+            st.success(text)
 
         else:
 
-            detection_box.info("No obstacle detected")
+            st.info("No obstacle detected")
 
 
-# ---------------- SPEAK DETECTION ----------------
+# ---------------- SPEAK OBJECT ----------------
 
-if st.session_state.speak_now:
+if st.session_state.speak_text:
 
-    speak(st.session_state.speak_now)
-    st.session_state.speak_now = None
+    speak(st.session_state.speak_text)
+
+    st.session_state.speak_text = ""
 
 
 # ---------------- NAVIGATION ----------------
@@ -268,8 +279,8 @@ def distance_meters(lat1, lon1, lat2, lon2):
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
 
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
+    dphi = math.radians(lat2-lat1)
+    dlambda = math.radians(lon2-lon1)
 
     a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
 
@@ -309,7 +320,6 @@ if st.session_state.nav_active:
                     speak(nav_text)
 
                     st.session_state.last_navigation = nav_text
-
                     st.session_state.nav_index += 1
 
     else:
