@@ -31,7 +31,7 @@ st.set_page_config(
 )
 
 
-# ---------------- SESSION ----------------
+# ---------------- SESSION STATE ----------------
 
 defaults = {
     "lat": None,
@@ -41,7 +41,7 @@ defaults = {
     "nav_active": False,
     "last_detection": "",
     "last_navigation": "",
-    "destination_input": "",
+    "destination_input": ""
 }
 
 for k,v in defaults.items():
@@ -56,14 +56,11 @@ def speak(text):
     components.html(
         f"""
 <script>
-
 const msg = new SpeechSynthesisUtterance("{text}");
 msg.rate = 1.1;
 msg.pitch = 1;
-
 speechSynthesis.cancel();
 speechSynthesis.speak(msg);
-
 </script>
 """,
         height=0
@@ -79,10 +76,10 @@ def load_model():
 model = load_model()
 
 
-# ---------------- RTC ----------------
+# ---------------- RTC CONFIG ----------------
 
 RTC_CONFIGURATION = RTCConfiguration(
-    {"iceServers":[{"urls":["stun:stun.l.google.com:19302"]}]}
+    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
 )
 
 
@@ -94,10 +91,9 @@ class BlindProcessor(VideoProcessorBase):
 
         self.lock = threading.Lock()
         self.detections = {}
-
+        self.voice = None
         self.last_spoken = ""
         self.last_time = 0
-        self.voice = None
 
 
     def recv(self, frame):
@@ -110,7 +106,7 @@ class BlindProcessor(VideoProcessorBase):
 
         for box in results.boxes:
 
-            x1,y1,x2,y2 = map(int,box.xyxy[0])
+            x1,y1,x2,y2 = map(int, box.xyxy[0])
             label = model.names[int(box.cls[0])]
 
             detected.append(label)
@@ -146,7 +142,7 @@ class BlindProcessor(VideoProcessorBase):
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 
-# ---------------- LOCATION ----------------
+# ---------------- GPS ----------------
 
 location = streamlit_geolocation()
 
@@ -171,9 +167,7 @@ with st.sidebar:
 
     if st.session_state.lat:
 
-        st.success(
-            f"{st.session_state.lat:.5f}, {st.session_state.lon:.5f}"
-        )
+        st.success(f"{st.session_state.lat:.5f}, {st.session_state.lon:.5f}")
 
     else:
 
@@ -182,10 +176,7 @@ with st.sidebar:
 
     st.subheader("Navigation")
 
-    destination = st.text_input(
-        "Destination",
-        key="destination_input"
-    )
+    destination = st.text_input("Destination", key="destination_input")
 
 
     if st.button("Start Navigation"):
@@ -230,12 +221,12 @@ with col1:
         key="camera",
         rtc_configuration=RTC_CONFIGURATION,
         video_processor_factory=BlindProcessor,
-        media_stream_constraints={"video":True,"audio":False},
+        media_stream_constraints={"video": True, "audio": False},
         async_processing=True
     )
 
 
-# ---------------- DETECTIONS ----------------
+# ---------------- DETECTIONS PANEL ----------------
 
 with col2:
 
@@ -244,21 +235,22 @@ with col2:
     if ctx.state.playing and ctx.video_processor:
 
         with ctx.video_processor.lock:
+
             detections = ctx.video_processor.detections.copy()
             voice = ctx.video_processor.voice
             ctx.video_processor.voice = None
 
+
         if detections:
 
-            text = ", ".join(
-                f"{count} {obj}" for obj,count in detections.items()
-            )
+            text = ", ".join(f"{v} {k}" for k,v in detections.items())
 
             st.success(text)
 
         else:
 
             st.info("No obstacle detected")
+
 
         if voice:
 
@@ -274,12 +266,12 @@ def distance_meters(lat1, lon1, lat2, lon2):
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
 
-    dphi = math.radians(lat2-lat1)
-    dlambda = math.radians(lon2-lon1)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
 
     a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
 
-    return 2 * R * math.atan2(math.sqrt(a),math.sqrt(1-a))
+    return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1-a))
 
 
 if st.session_state.nav_active:
