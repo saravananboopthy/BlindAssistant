@@ -13,11 +13,12 @@ from streamlit_geolocation import streamlit_geolocation
 
 import av
 import cv2
+import threading
 import time
 import math
+
 from collections import Counter
 from ultralytics import YOLO
-
 from navigator import get_walking_directions
 
 
@@ -38,9 +39,9 @@ defaults = {
     "nav_steps": [],
     "nav_index": 0,
     "nav_active": False,
+    "last_detection": "",
+    "last_navigation": "",
     "destination_input": "",
-    "detections": {},
-    "speech_queue": []
 }
 
 for k, v in defaults.items():
@@ -51,24 +52,18 @@ for k, v in defaults.items():
 # ---------------- SPEECH ----------------
 
 def speak(text):
-    st.session_state.speech_queue.append(text)
 
-
-def run_speech():
-    if st.session_state.speech_queue:
-        msg = st.session_state.speech_queue.pop(0)
-
-        components.html(
-            f"""
+    components.html(
+        f"""
 <script>
-const msg = new SpeechSynthesisUtterance("{msg}");
+const msg = new SpeechSynthesisUtterance("{text}");
 msg.rate = 1.1;
 msg.pitch = 1;
 speechSynthesis.speak(msg);
 </script>
 """,
-            height=0
-        )
+        height=0
+    )
 
 
 # ---------------- YOLO ----------------
@@ -92,8 +87,13 @@ RTC_CONFIGURATION = RTCConfiguration(
 class BlindProcessor(VideoProcessorBase):
 
     def __init__(self):
-        self.last_spoken = ""
+
+        self.lock = threading.Lock()
+        self.detections = {}
+        self.voice = None
         self.last_time = 0
+        self.last_spoken = ""
+
 
     def recv(self, frame):
 
@@ -111,23 +111,29 @@ class BlindProcessor(VideoProcessorBase):
             detected.append(label)
 
             cv2.rectangle(img,(x1,y1),(x2,y2),(0,255,0),2)
-            cv2.putText(img,label,(x1,y1-10),
-                        cv2.FONT_HERSHEY_SIMPLEX,0.6,(0,255,0),2)
+            cv2.putText(
+                img,
+                label,
+                (x1,y1-10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (0,255,0),
+                2
+            )
 
         counts = dict(Counter(detected))
 
-        st.session_state.detections = counts
+        with self.lock:
+            self.detections = counts
 
         if counts:
 
             text = ", ".join(counts.keys())
-
             now = time.time()
 
             if text != self.last_spoken and now - self.last_time > 1:
 
-                speak(text)
-
+                self.voice = text
                 self.last_spoken = text
                 self.last_time = now
 
@@ -139,10 +145,12 @@ class BlindProcessor(VideoProcessorBase):
 location = streamlit_geolocation()
 
 if location:
+
     lat = location.get("latitude")
     lon = location.get("longitude")
 
     if lat and lon:
+
         st.session_state.lat = float(lat)
         st.session_state.lon = float(lon)
 
@@ -160,9 +168,11 @@ with st.sidebar:
     else:
         st.warning("Allow location permission")
 
+
     st.subheader("Navigation")
 
     destination = st.text_input("Destination", key="destination_input")
+
 
     if st.button("Start Navigation"):
 
@@ -207,22 +217,33 @@ with col1:
     )
 
 
-# ---------------- DETECTION PANEL ----------------
+# ---------------- DETECTIONS PANEL ----------------
 
 with col2:
 
     st.subheader("Detected Objects")
 
-    if st.session_state.detections:
+    if ctx.state.playing and ctx.video_processor:
 
-        text = ", ".join(
-            f"{v} {k}" for k, v in st.session_state.detections.items()
-        )
+        with ctx.video_processor.lock:
 
-        st.success(text)
+            detections = ctx.video_processor.detections.copy()
+            voice = ctx.video_processor.voice
+            ctx.video_processor.voice = None
 
-    else:
-        st.info("No obstacle detected")
+
+        if detections:
+
+            text = ", ".join(f"{v} {k}" for k,v in detections.items())
+            st.success(text)
+
+        else:
+
+            st.info("No obstacle detected")
+
+
+        if voice:
+            speak(voice)
 
 
 # ---------------- NAVIGATION ----------------
@@ -269,10 +290,5 @@ if st.session_state.nav_active:
 
     else:
 
-        speak("Destination reached")
         st.success("Destination reached")
-
-
-# ---------------- SPEECH RUNNER ----------------
-
-run_speech()
+        speak("Destination reached")
