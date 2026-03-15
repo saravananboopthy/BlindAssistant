@@ -31,7 +31,7 @@ st.set_page_config(
 )
 
 
-# ---------------- SESSION STATE ----------------
+# ---------------- SESSION ----------------
 
 defaults = {
     "lat": None,
@@ -39,9 +39,8 @@ defaults = {
     "nav_steps": [],
     "nav_index": 0,
     "nav_active": False,
-    "last_detection": "",
-    "last_navigation": "",
-    "destination_input": ""
+    "destination_input": "",
+    "speech_queue": []
 }
 
 for k,v in defaults.items():
@@ -52,19 +51,26 @@ for k,v in defaults.items():
 # ---------------- SPEECH ----------------
 
 def speak(text):
+    st.session_state.speech_queue.append(text)
 
-    components.html(
-        f"""
+
+def run_speech():
+
+    if st.session_state.speech_queue:
+
+        msg = st.session_state.speech_queue.pop(0)
+
+        components.html(
+            f"""
 <script>
-const msg = new SpeechSynthesisUtterance("{text}");
+const msg = new SpeechSynthesisUtterance("{msg}");
 msg.rate = 1.1;
 msg.pitch = 1;
-speechSynthesis.cancel();
 speechSynthesis.speak(msg);
 </script>
 """,
-        height=0
-    )
+            height=0
+        )
 
 
 # ---------------- LOAD YOLO ----------------
@@ -76,10 +82,10 @@ def load_model():
 model = load_model()
 
 
-# ---------------- RTC CONFIG ----------------
+# ---------------- RTC ----------------
 
 RTC_CONFIGURATION = RTCConfiguration(
-    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+    {"iceServers":[{"urls":["stun:stun.l.google.com:19302"]}]}
 )
 
 
@@ -91,7 +97,6 @@ class BlindProcessor(VideoProcessorBase):
 
         self.lock = threading.Lock()
         self.detections = {}
-        self.voice = None
         self.last_spoken = ""
         self.last_time = 0
 
@@ -131,18 +136,20 @@ class BlindProcessor(VideoProcessorBase):
         if counts:
 
             text = ", ".join(counts.keys())
+
             now = time.time()
 
-            if text != self.last_spoken and (now - self.last_time) > 1:
+            if text != self.last_spoken and now - self.last_time > 1:
 
-                self.voice = text
+                speak(text)
+
                 self.last_spoken = text
                 self.last_time = now
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 
-# ---------------- GPS ----------------
+# ---------------- LOCATION ----------------
 
 location = streamlit_geolocation()
 
@@ -201,10 +208,6 @@ with st.sidebar:
 
                 st.error(error)
 
-        else:
-
-            st.warning("Location or destination missing")
-
 
 # ---------------- MAIN ----------------
 
@@ -221,7 +224,7 @@ with col1:
         key="camera",
         rtc_configuration=RTC_CONFIGURATION,
         video_processor_factory=BlindProcessor,
-        media_stream_constraints={"video": True, "audio": False},
+        media_stream_constraints={"video":True,"audio":False},
         async_processing=True
     )
 
@@ -235,26 +238,16 @@ with col2:
     if ctx.state.playing and ctx.video_processor:
 
         with ctx.video_processor.lock:
-
             detections = ctx.video_processor.detections.copy()
-            voice = ctx.video_processor.voice
-            ctx.video_processor.voice = None
-
 
         if detections:
 
             text = ", ".join(f"{v} {k}" for k,v in detections.items())
-
             st.success(text)
 
         else:
 
             st.info("No obstacle detected")
-
-
-        if voice:
-
-            speak(voice)
 
 
 # ---------------- NAVIGATION ----------------
@@ -266,17 +259,15 @@ def distance_meters(lat1, lon1, lat2, lon2):
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
 
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
+    dphi = math.radians(lat2-lat1)
+    dlambda = math.radians(lon2-lon1)
 
     a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
 
-    return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    return 2 * R * math.atan2(math.sqrt(a),math.sqrt(1-a))
 
 
 if st.session_state.nav_active:
-
-    st.divider()
 
     steps = st.session_state.nav_steps
     idx = st.session_state.nav_index
@@ -296,21 +287,13 @@ if st.session_state.nav_active:
                 step["lon"]
             )
 
-            st.info(f"Distance: {int(distance)} meters")
-
             if distance <= 20:
 
-                nav_text = step["text"]
+                speak(step["text"])
 
-                if nav_text != st.session_state.last_navigation:
+                st.session_state.nav_index += 1
 
-                    speak(nav_text)
 
-                    st.session_state.last_navigation = nav_text
-                    st.session_state.nav_index += 1
+# ---------------- RUN SPEECH ----------------
 
-    else:
-
-        st.success("Destination reached")
-
-        speak("Destination reached")
+run_speech()
