@@ -31,7 +31,7 @@ st.set_page_config(
 )
 
 
-# ---------------- SESSION STATE ----------------
+# ---------------- SESSION ----------------
 
 defaults = {
     "lat": None,
@@ -42,7 +42,6 @@ defaults = {
     "last_detection": "",
     "last_navigation": "",
     "destination_input": "",
-    "speak_text": ""
 }
 
 for k,v in defaults.items():
@@ -98,6 +97,7 @@ class BlindProcessor(VideoProcessorBase):
 
         self.last_spoken = ""
         self.last_time = 0
+        self.voice = None
 
 
     def recv(self, frame):
@@ -135,13 +135,11 @@ class BlindProcessor(VideoProcessorBase):
         if counts:
 
             text = ", ".join(counts.keys())
-
             now = time.time()
 
             if text != self.last_spoken and (now - self.last_time) > 1:
 
-                st.session_state.speak_text = text
-
+                self.voice = text
                 self.last_spoken = text
                 self.last_time = now
 
@@ -247,6 +245,8 @@ with col2:
 
         with ctx.video_processor.lock:
             detections = ctx.video_processor.detections.copy()
+            voice = ctx.video_processor.voice
+            ctx.video_processor.voice = None
 
         if detections:
 
@@ -260,14 +260,9 @@ with col2:
 
             st.info("No obstacle detected")
 
+        if voice:
 
-# ---------------- SPEAK OBJECT ----------------
-
-if st.session_state.speak_text:
-
-    speak(st.session_state.speak_text)
-
-    st.session_state.speak_text = ""
+            speak(voice)
 
 
 # ---------------- NAVIGATION ----------------
