@@ -16,6 +16,7 @@ import threading
 from collections import Counter
 from ultralytics import YOLO
 import math
+import time
 
 from navigator import get_walking_directions
 
@@ -100,8 +101,8 @@ class BlindProcessor(VideoProcessorBase):
         img = frame.to_ndarray(format="bgr24")
 
         results = model(img, conf=self.confidence, verbose=False)[0]
-detected = []
-confidence_limit = 0.45
+
+        detected = []
 
         for box in results.boxes:
 
@@ -202,7 +203,7 @@ st.title("👁 Blind Assistant")
 col1,col2 = st.columns([3,2])
 
 
-# CAMERA
+# ---------------- CAMERA ----------------
 
 with col1:
 
@@ -223,7 +224,7 @@ with col2:
 
     detection_box = st.empty()
 
-    while ctx.state.playing and ctx.video_processor:
+    if ctx.state.playing and ctx.video_processor:
 
         with ctx.video_processor.lock:
             detections = ctx.video_processor.detections.copy()
@@ -246,7 +247,7 @@ with col2:
 
             detection_box.info("No obstacle detected")
 
-        time.sleep(1)
+
 # ---------------- NAVIGATION ----------------
 
 def distance_meters(lat1, lon1, lat2, lon2):
