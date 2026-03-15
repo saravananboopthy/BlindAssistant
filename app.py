@@ -13,12 +13,11 @@ from streamlit_geolocation import streamlit_geolocation
 
 import av
 import cv2
-import threading
 import time
 import math
-
 from collections import Counter
 from ultralytics import YOLO
+
 from navigator import get_walking_directions
 
 
@@ -40,10 +39,11 @@ defaults = {
     "nav_index": 0,
     "nav_active": False,
     "destination_input": "",
+    "detections": {},
     "speech_queue": []
 }
 
-for k,v in defaults.items():
+for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -55,9 +55,7 @@ def speak(text):
 
 
 def run_speech():
-
     if st.session_state.speech_queue:
-
         msg = st.session_state.speech_queue.pop(0)
 
         components.html(
@@ -73,7 +71,7 @@ speechSynthesis.speak(msg);
         )
 
 
-# ---------------- LOAD YOLO ----------------
+# ---------------- YOLO ----------------
 
 @st.cache_resource
 def load_model():
@@ -85,7 +83,7 @@ model = load_model()
 # ---------------- RTC ----------------
 
 RTC_CONFIGURATION = RTCConfiguration(
-    {"iceServers":[{"urls":["stun:stun.l.google.com:19302"]}]}
+    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
 )
 
 
@@ -94,12 +92,8 @@ RTC_CONFIGURATION = RTCConfiguration(
 class BlindProcessor(VideoProcessorBase):
 
     def __init__(self):
-
-        self.lock = threading.Lock()
-        self.detections = {}
         self.last_spoken = ""
         self.last_time = 0
-
 
     def recv(self, frame):
 
@@ -111,27 +105,18 @@ class BlindProcessor(VideoProcessorBase):
 
         for box in results.boxes:
 
-            x1,y1,x2,y2 = map(int, box.xyxy[0])
+            x1, y1, x2, y2 = map(int, box.xyxy[0])
             label = model.names[int(box.cls[0])]
 
             detected.append(label)
 
             cv2.rectangle(img,(x1,y1),(x2,y2),(0,255,0),2)
-
-            cv2.putText(
-                img,
-                label,
-                (x1,y1-10),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
-                (0,255,0),
-                2
-            )
+            cv2.putText(img,label,(x1,y1-10),
+                        cv2.FONT_HERSHEY_SIMPLEX,0.6,(0,255,0),2)
 
         counts = dict(Counter(detected))
 
-        with self.lock:
-            self.detections = counts
+        st.session_state.detections = counts
 
         if counts:
 
@@ -154,12 +139,10 @@ class BlindProcessor(VideoProcessorBase):
 location = streamlit_geolocation()
 
 if location:
-
     lat = location.get("latitude")
     lon = location.get("longitude")
 
     if lat and lon:
-
         st.session_state.lat = float(lat)
         st.session_state.lon = float(lon)
 
@@ -173,28 +156,21 @@ with st.sidebar:
     st.subheader("📍 Live Location")
 
     if st.session_state.lat:
-
         st.success(f"{st.session_state.lat:.5f}, {st.session_state.lon:.5f}")
-
     else:
-
         st.warning("Allow location permission")
-
 
     st.subheader("Navigation")
 
     destination = st.text_input("Destination", key="destination_input")
 
-
     if st.button("Start Navigation"):
-
-        destination = st.session_state.destination_input
 
         if st.session_state.lat and destination:
 
             source = f"{st.session_state.lat},{st.session_state.lon}"
 
-            result,error = get_walking_directions(source,destination)
+            result, error = get_walking_directions(source, destination)
 
             if result:
 
@@ -205,15 +181,17 @@ with st.sidebar:
                 speak("Navigation started")
 
             else:
-
                 st.error(error)
+
+        else:
+            st.warning("Location or destination missing")
 
 
 # ---------------- MAIN ----------------
 
 st.title("👁 Blind Assistant")
 
-col1,col2 = st.columns([3,2])
+col1, col2 = st.columns([3,2])
 
 
 # ---------------- CAMERA ----------------
@@ -224,30 +202,27 @@ with col1:
         key="camera",
         rtc_configuration=RTC_CONFIGURATION,
         video_processor_factory=BlindProcessor,
-        media_stream_constraints={"video":True,"audio":False},
+        media_stream_constraints={"video": True, "audio": False},
         async_processing=True
     )
 
 
-# ---------------- DETECTIONS PANEL ----------------
+# ---------------- DETECTION PANEL ----------------
 
 with col2:
 
     st.subheader("Detected Objects")
 
-    if ctx.state.playing and ctx.video_processor:
+    if st.session_state.detections:
 
-        with ctx.video_processor.lock:
-            detections = ctx.video_processor.detections.copy()
+        text = ", ".join(
+            f"{v} {k}" for k, v in st.session_state.detections.items()
+        )
 
-        if detections:
+        st.success(text)
 
-            text = ", ".join(f"{v} {k}" for k,v in detections.items())
-            st.success(text)
-
-        else:
-
-            st.info("No obstacle detected")
+    else:
+        st.info("No obstacle detected")
 
 
 # ---------------- NAVIGATION ----------------
@@ -259,12 +234,12 @@ def distance_meters(lat1, lon1, lat2, lon2):
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
 
-    dphi = math.radians(lat2-lat1)
-    dlambda = math.radians(lon2-lon1)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
 
     a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
 
-    return 2 * R * math.atan2(math.sqrt(a),math.sqrt(1-a))
+    return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1-a))
 
 
 if st.session_state.nav_active:
@@ -290,10 +265,14 @@ if st.session_state.nav_active:
             if distance <= 20:
 
                 speak(step["text"])
-
                 st.session_state.nav_index += 1
 
+    else:
 
-# ---------------- RUN SPEECH ----------------
+        speak("Destination reached")
+        st.success("Destination reached")
+
+
+# ---------------- SPEECH RUNNER ----------------
 
 run_speech()
