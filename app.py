@@ -41,7 +41,6 @@ defaults = {
     "nav_active": False,
     "destination_input": "",
     "last_navigation": "",
-    "speech_queue": []
 }
 
 for k,v in defaults.items():
@@ -93,7 +92,6 @@ class BlindProcessor(VideoProcessorBase):
 
         self.last_spoken = ""
         self.last_time = 0
-        self.voice = None
 
 
     def recv(self, frame):
@@ -128,15 +126,17 @@ class BlindProcessor(VideoProcessorBase):
         with self.lock:
             self.detections = counts
 
+        # ----- FAST DETECTION SPEECH -----
+
         if counts:
 
             text = ", ".join(counts.keys())
-
             now = time.time()
 
-            if text != self.last_spoken and now - self.last_time > 1:
+            if text != self.last_spoken and now - self.last_time > 0.7:
 
-                self.voice = text
+                st.session_state["detect_voice"] = text
+
                 self.last_spoken = text
                 self.last_time = now
 
@@ -224,10 +224,7 @@ with col2:
     if ctx.state.playing and ctx.video_processor:
 
         with ctx.video_processor.lock:
-
             detections = ctx.video_processor.detections.copy()
-            voice = ctx.video_processor.voice
-            ctx.video_processor.voice = None
 
         if detections:
 
@@ -235,11 +232,15 @@ with col2:
             st.success(text)
 
         else:
-
             st.info("No obstacle detected")
 
-        if voice:
-            speak(voice)
+
+# ----- INSTANT DETECTION VOICE -----
+
+if "detect_voice" in st.session_state:
+
+    speak(st.session_state["detect_voice"])
+    del st.session_state["detect_voice"]
 
 
 # ---------------- NAVIGATION ----------------
