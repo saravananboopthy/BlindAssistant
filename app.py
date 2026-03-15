@@ -40,7 +40,8 @@ defaults = {
     "nav_index": 0,
     "nav_active": False,
     "destination_input": "",
-    "last_navigation": "",
+    "last_detection": "",
+    "last_navigation": ""
 }
 
 for k,v in defaults.items():
@@ -57,7 +58,7 @@ def speak(text):
 <script>
 const msg = new SpeechSynthesisUtterance("{text}");
 msg.rate = 1.1;
-msg.pitch = 1;
+speechSynthesis.cancel();
 speechSynthesis.speak(msg);
 </script>
 """,
@@ -90,10 +91,6 @@ class BlindProcessor(VideoProcessorBase):
         self.lock = threading.Lock()
         self.detections = {}
 
-        self.last_spoken = ""
-        self.last_time = 0
-
-
     def recv(self, frame):
 
         img = frame.to_ndarray(format="bgr24")
@@ -110,35 +107,13 @@ class BlindProcessor(VideoProcessorBase):
             detected.append(label)
 
             cv2.rectangle(img,(x1,y1),(x2,y2),(0,255,0),2)
-
-            cv2.putText(
-                img,
-                label,
-                (x1,y1-10),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
-                (0,255,0),
-                2
-            )
+            cv2.putText(img,label,(x1,y1-10),
+                        cv2.FONT_HERSHEY_SIMPLEX,0.6,(0,255,0),2)
 
         counts = dict(Counter(detected))
 
         with self.lock:
             self.detections = counts
-
-        # ----- FAST DETECTION SPEECH -----
-
-        if counts:
-
-            text = ", ".join(counts.keys())
-            now = time.time()
-
-            if text != self.last_spoken and now - self.last_time > 0.7:
-
-                st.session_state["detect_voice"] = text
-
-                self.last_spoken = text
-                self.last_time = now
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
@@ -229,18 +204,17 @@ with col2:
         if detections:
 
             text = ", ".join(f"{v} {k}" for k,v in detections.items())
+
             st.success(text)
 
+            if text != st.session_state.last_detection:
+
+                speak(text)
+                st.session_state.last_detection = text
+
         else:
+
             st.info("No obstacle detected")
-
-
-# ----- INSTANT DETECTION VOICE -----
-
-if "detect_voice" in st.session_state:
-
-    speak(st.session_state["detect_voice"])
-    del st.session_state["detect_voice"]
 
 
 # ---------------- NAVIGATION ----------------
