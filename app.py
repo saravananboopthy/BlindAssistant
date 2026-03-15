@@ -39,7 +39,8 @@ defaults = {
     "nav_index": 0,
     "nav_active": False,
     "last_navigation": "",
-    "destination_input": ""
+    "destination_input": "",
+    "speak_now": None
 }
 
 for k,v in defaults.items():
@@ -56,8 +57,7 @@ def speak(text):
 <script>
 const msg = new SpeechSynthesisUtterance("{text}");
 msg.rate = 1.1;
-msg.pitch = 1;
-msg.volume = 1;
+speechSynthesis.cancel();
 speechSynthesis.speak(msg);
 </script>
 """,
@@ -92,7 +92,6 @@ class BlindProcessor(VideoProcessorBase):
         self.detections = {}
         self.last_spoken = ""
         self.last_time = 0
-        self.speak_now = None
 
     def recv(self, frame):
 
@@ -129,12 +128,10 @@ class BlindProcessor(VideoProcessorBase):
         if counts:
 
             text = ", ".join(counts.keys())
-
             now = time.time()
 
-            if text != self.last_spoken and (now - self.last_time) > 1:
-
-                self.speak_now = text
+            if text != self.last_spoken and (now - self.last_time) > 0.5:
+                st.session_state.speak_now = text
                 self.last_spoken = text
                 self.last_time = now
 
@@ -228,7 +225,7 @@ with col1:
     )
 
 
-# ---------------- DETECTION PANEL ----------------
+# ---------------- DETECTIONS ----------------
 
 with col2:
 
@@ -239,10 +236,7 @@ with col2:
     if ctx.state.playing and ctx.video_processor:
 
         with ctx.video_processor.lock:
-
             detections = ctx.video_processor.detections.copy()
-            speak_now = ctx.video_processor.speak_now
-            ctx.video_processor.speak_now = None
 
         if detections:
 
@@ -256,9 +250,13 @@ with col2:
 
             detection_box.info("No obstacle detected")
 
-        if speak_now:
 
-            speak(speak_now)
+# ---------------- SPEAK DETECTION ----------------
+
+if st.session_state.speak_now:
+
+    speak(st.session_state.speak_now)
+    st.session_state.speak_now = None
 
 
 # ---------------- NAVIGATION ----------------
