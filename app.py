@@ -40,8 +40,7 @@ defaults = {
     "nav_active": False,
     "last_detection": "",
     "last_navigation": "",
-    "destination_input": "",
-    "speech_queue": []
+    "destination_input": ""
 }
 
 for k,v in defaults.items():
@@ -49,33 +48,26 @@ for k,v in defaults.items():
         st.session_state[k] = v
 
 
-# ---------------- SPEECH QUEUE ----------------
+# ---------------- SPEECH ----------------
 
 def speak(text):
-    st.session_state.speech_queue.append(text)
 
-
-def play_speech():
-
-    if st.session_state.speech_queue:
-
-        message = st.session_state.speech_queue.pop(0)
-
-        components.html(
-            f"""
+    components.html(
+        f"""
 <script>
 
-const msg = new SpeechSynthesisUtterance("{message}");
+const msg = new SpeechSynthesisUtterance("{text}");
 msg.rate = 1.1;
 msg.pitch = 1;
 msg.volume = 1;
 
+speechSynthesis.cancel();
 speechSynthesis.speak(msg);
 
 </script>
 """,
-            height=0
-        )
+        height=0
+    )
 
 
 # ---------------- LOAD YOLO ----------------
@@ -103,6 +95,8 @@ class BlindProcessor(VideoProcessorBase):
     def __init__(self):
         self.lock = threading.Lock()
         self.detections = {}
+        self.last_spoken = ""
+        self.speak_text = None
 
     def recv(self, frame):
 
@@ -131,8 +125,18 @@ class BlindProcessor(VideoProcessorBase):
                 2
             )
 
+        counts = dict(Counter(detected))
+
         with self.lock:
-            self.detections = dict(Counter(detected))
+            self.detections = counts
+
+        if counts:
+
+            text = ", ".join(counts.keys())
+
+            if text != self.last_spoken:
+                self.speak_text = text
+                self.last_spoken = text
 
         return av.VideoFrame.from_ndarray(img,format="bgr24")
 
@@ -236,6 +240,8 @@ with col2:
 
         with ctx.video_processor.lock:
             detections = ctx.video_processor.detections.copy()
+            speak_now = ctx.video_processor.speak_text
+            ctx.video_processor.speak_text = None
 
         if detections:
 
@@ -245,14 +251,12 @@ with col2:
 
             detection_box.success(text)
 
-            if text != st.session_state.last_detection:
-
-                speak(text)
-                st.session_state.last_detection = text
-
         else:
 
             detection_box.info("No obstacle detected")
+
+        if speak_now:
+            speak(speak_now)
 
 
 # ---------------- NAVIGATION ----------------
@@ -313,8 +317,3 @@ if st.session_state.nav_active:
         st.success("Destination reached")
 
         speak("Destination reached")
-
-
-# ---------------- PLAY SPEECH ----------------
-
-play_speech()
