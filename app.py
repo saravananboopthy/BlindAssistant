@@ -10,7 +10,6 @@ import streamlit as st
 import streamlit.components.v1 as components
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
 from streamlit_geolocation import streamlit_geolocation
-from streamlit_autorefresh import st_autorefresh
 
 import av
 import cv2
@@ -31,9 +30,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# force UI refresh every 0.4 sec
-st_autorefresh(interval=400, key="refresh")
-
 
 # ---------------- SESSION ----------------
 
@@ -48,7 +44,7 @@ defaults = {
     "speech_queue": []
 }
 
-for k, v in defaults.items():
+for k,v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -56,25 +52,18 @@ for k, v in defaults.items():
 # ---------------- SPEECH ----------------
 
 def speak(text):
-    st.session_state.speech_queue.append(text)
 
-
-def run_speech():
-    if st.session_state.speech_queue:
-
-        msg = st.session_state.speech_queue.pop(0)
-
-        components.html(
-            f"""
+    components.html(
+        f"""
 <script>
-const msg = new SpeechSynthesisUtterance("{msg}");
+const msg = new SpeechSynthesisUtterance("{text}");
 msg.rate = 1.1;
 msg.pitch = 1;
 speechSynthesis.speak(msg);
 </script>
 """,
-            height=0
-        )
+        height=0
+    )
 
 
 # ---------------- YOLO ----------------
@@ -104,6 +93,7 @@ class BlindProcessor(VideoProcessorBase):
 
         self.last_spoken = ""
         self.last_time = 0
+        self.voice = None
 
 
     def recv(self, frame):
@@ -146,8 +136,7 @@ class BlindProcessor(VideoProcessorBase):
 
             if text != self.last_spoken and now - self.last_time > 1:
 
-                speak(text)
-
+                self.voice = text
                 self.last_spoken = text
                 self.last_time = now
 
@@ -235,18 +224,22 @@ with col2:
     if ctx.state.playing and ctx.video_processor:
 
         with ctx.video_processor.lock:
+
             detections = ctx.video_processor.detections.copy()
+            voice = ctx.video_processor.voice
+            ctx.video_processor.voice = None
 
         if detections:
 
-            text = ", ".join(
-                f"{v} {k}" for k,v in detections.items()
-            )
-
+            text = ", ".join(f"{v} {k}" for k,v in detections.items())
             st.success(text)
 
         else:
+
             st.info("No obstacle detected")
+
+        if voice:
+            speak(voice)
 
 
 # ---------------- NAVIGATION ----------------
@@ -299,8 +292,3 @@ if st.session_state.nav_active:
 
         speak("Destination reached")
         st.success("Destination reached")
-
-
-# ---------------- SPEECH RUNNER ----------------
-
-run_speech()
