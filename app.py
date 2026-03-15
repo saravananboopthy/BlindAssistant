@@ -40,7 +40,8 @@ defaults = {
     "nav_active": False,
     "last_detection": "",
     "last_navigation": "",
-    "destination_input": ""
+    "destination_input": "",
+    "speech_queue": []
 }
 
 for k,v in defaults.items():
@@ -48,26 +49,33 @@ for k,v in defaults.items():
         st.session_state[k] = v
 
 
-# ---------------- SPEECH ----------------
+# ---------------- SPEECH QUEUE ----------------
 
 def speak(text):
+    st.session_state.speech_queue.append(text)
 
-    components.html(
-        f"""
+
+def play_speech():
+
+    if st.session_state.speech_queue:
+
+        message = st.session_state.speech_queue.pop(0)
+
+        components.html(
+            f"""
 <script>
 
-const msg = new SpeechSynthesisUtterance("{text}");
+const msg = new SpeechSynthesisUtterance("{message}");
 msg.rate = 1.1;
 msg.pitch = 1;
 msg.volume = 1;
 
-speechSynthesis.cancel();
 speechSynthesis.speak(msg);
 
 </script>
 """,
-        height=0
-    )
+            height=0
+        )
 
 
 # ---------------- LOAD YOLO ----------------
@@ -240,7 +248,6 @@ with col2:
             if text != st.session_state.last_detection:
 
                 speak(text)
-
                 st.session_state.last_detection = text
 
         else:
@@ -306,3 +313,8 @@ if st.session_state.nav_active:
         st.success("Destination reached")
 
         speak("Destination reached")
+
+
+# ---------------- PLAY SPEECH ----------------
+
+play_speech()
