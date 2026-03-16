@@ -192,6 +192,8 @@ with col1:
 
 # ---------------- DETECTION PANEL ----------------
 
+# ---------------- DETECTION PANEL ----------------
+
 with col2:
 
     st.subheader("Detected Objects")
@@ -203,19 +205,30 @@ with col2:
 
         if detections:
 
+            # show panel instantly
             text = ", ".join(f"{v} {k}" for k,v in detections.items())
-
             st.success(text)
 
-            if text != st.session_state.last_detection:
+            # initialize memory
+            if "seen_objects" not in st.session_state:
+                st.session_state.seen_objects = {}
 
-                speak(text)
-                st.session_state.last_detection = text
+            for obj, count in detections.items():
+
+                now = time.time()
+
+                # if new object OR enough time passed
+                if (
+                    obj not in st.session_state.seen_objects
+                    or now - st.session_state.seen_objects[obj] > 3
+                ):
+
+                    speak(obj)
+                    st.session_state.seen_objects[obj] = now
 
         else:
 
             st.info("No obstacle detected")
-
 
 # ---------------- NAVIGATION ----------------
 
