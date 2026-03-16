@@ -4,7 +4,7 @@ AI Vision + Voice Navigation
 """
 
 import os
-os.environ["YOLO_CONFIG_DIR"]="/tmp"
+os.environ["YOLO_CONFIG_DIR"] = "/tmp"
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -34,42 +34,34 @@ st.set_page_config(
 # ---------------- SESSION ----------------
 
 defaults = {
-    "lat":None,
-    "lon":None,
-    "nav_steps":[],
-    "nav_index":0,
-    "nav_active":False,
-    "destination_input":"",
-    "speech_queue":[],
+    "lat": None,
+    "lon": None,
+    "nav_steps": [],
+    "nav_index": 0,
+    "nav_active": False,
+    "destination_input": "",
+    "last_navigation": "",
 }
 
-for k,v in defaults.items():
+for k, v in defaults.items():
     if k not in st.session_state:
-        st.session_state[k]=v
+        st.session_state[k] = v
 
 
-# ---------------- SPEECH SYSTEM ----------------
+# ---------------- SPEECH ----------------
 
-def speak_queue():
-
-    if st.session_state.speech_queue:
-
-        text = st.session_state.speech_queue.pop(0)
-
-        components.html(
-            f"""
+def speak(text):
+    components.html(
+        f"""
 <script>
 const msg = new SpeechSynthesisUtterance("{text}");
 msg.rate = 1.1;
+msg.pitch = 1;
 speechSynthesis.speak(msg);
 </script>
 """,
-            height=0
-        )
-
-
-def add_speech(text):
-    st.session_state.speech_queue.append(text)
+        height=0
+    )
 
 
 # ---------------- YOLO ----------------
@@ -93,7 +85,6 @@ RTC_CONFIGURATION = RTCConfiguration(
 class BlindProcessor(VideoProcessorBase):
 
     def __init__(self):
-
         self.lock = threading.Lock()
         self.detections = {}
 
@@ -103,40 +94,46 @@ class BlindProcessor(VideoProcessorBase):
 
         results = model(img, conf=0.45, verbose=False)[0]
 
-        detected=[]
+        detected = []
 
         for box in results.boxes:
 
-            x1,y1,x2,y2 = map(int,box.xyxy[0])
-            label=model.names[int(box.cls[0])]
+            x1,y1,x2,y2 = map(int, box.xyxy[0])
+            label = model.names[int(box.cls[0])]
 
             detected.append(label)
 
             cv2.rectangle(img,(x1,y1),(x2,y2),(0,255,0),2)
-            cv2.putText(img,label,(x1,y1-10),
-                        cv2.FONT_HERSHEY_SIMPLEX,0.6,(0,255,0),2)
+            cv2.putText(
+                img,
+                label,
+                (x1,y1-10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (0,255,0),
+                2
+            )
 
-        counts=dict(Counter(detected))
+        counts = dict(Counter(detected))
 
         with self.lock:
-            self.detections=counts
+            self.detections = counts
 
-        return av.VideoFrame.from_ndarray(img,format="bgr24")
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 
 # ---------------- LOCATION ----------------
 
-location=streamlit_geolocation()
+location = streamlit_geolocation()
 
 if location:
 
-    lat=location.get("latitude")
-    lon=location.get("longitude")
+    lat = location.get("latitude")
+    lon = location.get("longitude")
 
     if lat and lon:
-
-        st.session_state.lat=float(lat)
-        st.session_state.lon=float(lon)
+        st.session_state.lat = float(lat)
+        st.session_state.lon = float(lon)
 
 
 # ---------------- SIDEBAR ----------------
@@ -145,6 +142,8 @@ with st.sidebar:
 
     st.title("Blind Assistant")
 
+    st.subheader("📍 Live Location")
+
     if st.session_state.lat:
         st.success(f"{st.session_state.lat:.5f}, {st.session_state.lon:.5f}")
     else:
@@ -152,23 +151,23 @@ with st.sidebar:
 
     st.subheader("Navigation")
 
-    dest=st.text_input("Destination",key="destination_input")
+    destination = st.text_input("Destination", key="destination_input")
 
     if st.button("Start Navigation"):
 
-        if st.session_state.lat and dest:
+        if st.session_state.lat and destination:
 
-            src=f"{st.session_state.lat},{st.session_state.lon}"
+            source = f"{st.session_state.lat},{st.session_state.lon}"
 
-            result,error=get_walking_directions(src,dest)
+            result, error = get_walking_directions(source, destination)
 
             if result:
 
-                st.session_state.nav_steps=result["steps"]
-                st.session_state.nav_index=0
-                st.session_state.nav_active=True
+                st.session_state.nav_steps = result["steps"]
+                st.session_state.nav_index = 0
+                st.session_state.nav_active = True
 
-                add_speech("Navigation started")
+                speak("Navigation started")
 
             else:
                 st.error(error)
@@ -178,14 +177,14 @@ with st.sidebar:
 
 st.title("👁 Blind Assistant")
 
-col1,col2=st.columns([3,2])
+col1, col2 = st.columns([3,2])
 
 
 # ---------------- CAMERA ----------------
 
 with col1:
 
-    ctx=webrtc_streamer(
+    ctx = webrtc_streamer(
         key="camera",
         rtc_configuration=RTC_CONFIGURATION,
         video_processor_factory=BlindProcessor,
@@ -194,7 +193,7 @@ with col1:
     )
 
 
-# ---------------- DETECTIONS ----------------
+# ---------------- DETECTION PANEL ----------------
 
 with col2:
 
@@ -203,14 +202,28 @@ with col2:
     if ctx.state.playing and ctx.video_processor:
 
         with ctx.video_processor.lock:
-            detections=ctx.video_processor.detections.copy()
+            detections = ctx.video_processor.detections.copy()
 
         if detections:
 
-            text=", ".join(f"{v} {k}" for k,v in detections.items())
+            text = ", ".join(f"{v} {k}" for k,v in detections.items())
             st.success(text)
 
-            add_speech(text)
+            # detection speech memory
+            if "detected_memory" not in st.session_state:
+                st.session_state.detected_memory = {}
+
+            for obj in detections:
+
+                now = time.time()
+
+                if (
+                    obj not in st.session_state.detected_memory
+                    or now - st.session_state.detected_memory[obj] > 2
+                ):
+
+                    speak(obj)
+                    st.session_state.detected_memory[obj] = now
 
         else:
             st.info("No obstacle detected")
@@ -218,52 +231,50 @@ with col2:
 
 # ---------------- NAVIGATION ----------------
 
-def distance_meters(lat1,lon1,lat2,lon2):
+def distance_meters(lat1, lon1, lat2, lon2):
 
-    R=6371000
+    R = 6371000
 
-    phi1=math.radians(lat1)
-    phi2=math.radians(lat2)
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
 
-    dphi=math.radians(lat2-lat1)
-    dlambda=math.radians(lon2-lon1)
+    dphi = math.radians(lat2-lat1)
+    dlambda = math.radians(lon2-lon1)
 
-    a=math.sin(dphi/2)**2+math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
 
-    return 2*R*math.atan2(math.sqrt(a),math.sqrt(1-a))
+    return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1-a))
 
 
 if st.session_state.nav_active:
 
-    steps=st.session_state.nav_steps
-    idx=st.session_state.nav_index
+    steps = st.session_state.nav_steps
+    idx = st.session_state.nav_index
 
-    if idx<len(steps):
+    if idx < len(steps):
 
-        step=steps[idx]
+        step = steps[idx]
 
         st.success(step["text"])
 
         if st.session_state.lat:
 
-            d=distance_meters(
+            distance = distance_meters(
                 st.session_state.lat,
                 st.session_state.lon,
                 step["lat"],
                 step["lon"]
             )
 
-            if d<=20:
+            if distance <= 20:
 
-                add_speech(step["text"])
-                st.session_state.nav_index+=1
+                if step["text"] != st.session_state.last_navigation:
+
+                    speak(step["text"])
+                    st.session_state.last_navigation = step["text"]
+                    st.session_state.nav_index += 1
 
     else:
 
-        add_speech("Destination reached")
+        speak("Destination reached")
         st.success("Destination reached")
-
-
-# ---------------- SPEECH RUNNER ----------------
-
-speak_queue()
