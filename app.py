@@ -10,6 +10,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
 from streamlit_geolocation import streamlit_geolocation
+from streamlit_autorefresh import st_autorefresh
 
 import av
 import cv2
@@ -18,7 +19,6 @@ import time
 import math
 from collections import Counter
 from ultralytics import YOLO
-
 from navigator import get_walking_directions
 
 
@@ -29,6 +29,9 @@ st.set_page_config(
     page_icon="👁️",
     layout="wide"
 )
+
+# refresh UI every second (does NOT restart camera session)
+st_autorefresh(interval=1000, key="refresh")
 
 
 # ---------------- SESSION ----------------
@@ -43,7 +46,7 @@ defaults = {
     "last_navigation": "",
 }
 
-for k, v in defaults.items():
+for k,v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -97,22 +100,14 @@ class BlindProcessor(VideoProcessorBase):
         detected = []
 
         for box in results.boxes:
-
             x1,y1,x2,y2 = map(int, box.xyxy[0])
             label = model.names[int(box.cls[0])]
 
             detected.append(label)
 
             cv2.rectangle(img,(x1,y1),(x2,y2),(0,255,0),2)
-            cv2.putText(
-                img,
-                label,
-                (x1,y1-10),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
-                (0,255,0),
-                2
-            )
+            cv2.putText(img,label,(x1,y1-10),
+                        cv2.FONT_HERSHEY_SIMPLEX,0.6,(0,255,0),2)
 
         counts = dict(Counter(detected))
 
@@ -127,7 +122,6 @@ class BlindProcessor(VideoProcessorBase):
 location = streamlit_geolocation()
 
 if location:
-
     lat = location.get("latitude")
     lon = location.get("longitude")
 
@@ -159,14 +153,12 @@ with st.sidebar:
 
             source = f"{st.session_state.lat},{st.session_state.lon}"
 
-            result, error = get_walking_directions(source, destination)
+            result,error = get_walking_directions(source,destination)
 
             if result:
-
                 st.session_state.nav_steps = result["steps"]
                 st.session_state.nav_index = 0
                 st.session_state.nav_active = True
-
                 speak("Navigation started")
 
             else:
@@ -177,7 +169,7 @@ with st.sidebar:
 
 st.title("👁 Blind Assistant")
 
-col1, col2 = st.columns([3,2])
+col1,col2 = st.columns([3,2])
 
 
 # ---------------- CAMERA ----------------
@@ -209,7 +201,6 @@ with col2:
             text = ", ".join(f"{v} {k}" for k,v in detections.items())
             st.success(text)
 
-            # detection speech memory
             if "detected_memory" not in st.session_state:
                 st.session_state.detected_memory = {}
 
@@ -221,7 +212,6 @@ with col2:
                     obj not in st.session_state.detected_memory
                     or now - st.session_state.detected_memory[obj] > 2
                 ):
-
                     speak(obj)
                     st.session_state.detected_memory[obj] = now
 
@@ -243,7 +233,7 @@ def distance_meters(lat1, lon1, lat2, lon2):
 
     a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
 
-    return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    return 2 * R * math.atan2(math.sqrt(a),math.sqrt(1-a))
 
 
 if st.session_state.nav_active:
@@ -254,7 +244,6 @@ if st.session_state.nav_active:
     if idx < len(steps):
 
         step = steps[idx]
-
         st.success(step["text"])
 
         if st.session_state.lat:
